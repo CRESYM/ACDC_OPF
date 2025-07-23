@@ -1,30 +1,33 @@
-function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, gen_entire_ac, ...
-    pgen_ac_k, qgen_ac_k, baseMVA_ac, vn2_ac_k, vn2_dc_k, pij_ac_k, qij_ac_k, pij_dc_k, ps_dc_k, qs_dc_k, baseMW_dc, pol_dc)
+function viz_opf(bus_entire_ac, branch_entire_ac, gen_entire_ac, res_entire_ac, ...
+    pgen_ac_k, qgen_ac_k, pij_ac_k, qij_ac_k, pres_ac_k, qres_ac_k, vn2_ac_k, baseMVA_ac, ...
+    bus_dc, branch_dc, conv_dc, pij_dc_k, ps_dc_k, qs_dc_k, vn2_dc_k, pol_dc, baseMW_dc)
 % VIZ_OPF Visualizes the AC/DC OPF Results
 %
 % INPUTS:
 %   bus_entire_ac       - Complete bus data from the AC network.
 %   branch_entire_ac    - Complete branch data from the AC network.
 %   gen_entire_ac       - Complete generator data from the AC network.
-%   baseMVA_ac          - AC system base MVA value.
+%   res_entire_ac       - Complete RES data from the DC network.
 %   pgen_ac_k           - Optimized resutls of generator active power.
 %   qgen_ac_k           - Optimized results of generator reactive power.
-%   vn2_ac_k            - Optimized results of the squared AC voltage.
 %   pij_ac_k            - Optimized results of the AC branch active power.
 %   qij_ac_k            - Optimized results of the AC branch reactive power.
+%   pres_ac_k           - Optimized results of the AC RES active power.
+%   qres_ac_k           - Optimized results of the AC RES reactive power.
+%   vn2_ac_k            - Optimized results of the squared AC voltage.
+%   baseMVA_ac          - AC system base MVA value.
 %
 %   bus_dc              - Bus data from the DC network.
 %   branch_dc           - Branch data from the DC network.
 %   conv_dc             - Converter data.
-%   baseMW_dc           - DC system base MW value.
-%   pol_dc              - Polarity of the DC network
-%   vn2_dc_k            - Optimized results of the DC network.
 %   pij_dc_k            - Optimized resutls of the DC branch active power.
 %   ps_dc_k             - Optimized results of the VSC PCC active power.
 %   qs_dc_k             - Optimized results of the VSC PCC reactive power.
+%   vn2_dc_k            - Optimized results of the squared DC voltage.
+%   pol_dc              - Polarity of the DC network
+%   baseMW_dc           - DC system base MW value.
 
-% OUTPUTS: None
-
+% OUTPUTS: Figure
 %% Reorder AC Data---------------------------------------------------------
 numBuses_ac = size(bus_entire_ac, 1);
 oldBusNums_ac = bus_entire_ac(:, 1);
@@ -72,6 +75,14 @@ gen_entire_ac_new(:, 1) = mappingMatrix(idx, 2);
 gen_entire_ac_new(:, 2) = vertcat(pgen_ac_k{:}) * baseMVA_ac;
 gen_entire_ac_new(:, 3) = vertcat(qgen_ac_k{:}) * baseMVA_ac;
 
+%% Reorder RES Data--------------------------------------------------------
+mappingMatrix = [bus_entire_ac(:,1), bus_entire_ac_new(:,1), bus_entire_ac(:, end)];
+[~, idx] = ismember(res_entire_ac(:, [1, end]), mappingMatrix(:, [1,3]), 'rows');
+res_entire_ac_new = res_entire_ac;
+res_entire_ac_new(:, 1) = mappingMatrix(idx, 2);
+res_entire_ac_new(:, 2) = vertcat(pres_ac_k{:}) * baseMVA_ac;
+res_entire_ac_new(:, 3) = vertcat(qres_ac_k{:}) * baseMVA_ac;
+
 %% Construct Network Graph-------------------------------------------------
 fromNode = [branch_entire_ac_new(:, 1); branch_dc_new(:, 1); conv_dc_new(:, 1)];
 toNode   = [branch_entire_ac_new(:, 2); branch_dc_new(:, 2); conv_dc_new(:, 2)];
@@ -100,35 +111,61 @@ numNodes = numBuses_ac + numBuses_dc;
 acBusNums = bus_entire_ac_new(:, 1);
 dcBusNums = bus_dc_new(:, 1);
 genBusNums = gen_entire_ac_new(:, 1);
+resBusNums = res_entire_ac_new(:, 1);
+
+xAll   = [];   % X 
+yAll   = [];   % Y 
+sAll   = [];   % Size
+cAll   = [];   % Color
 
 for i = 1:length(acBusNums)
     idx = acBusNums(i);
+
+    % -------- Compute power size --------
+    loadPower = sqrt( bus_entire_ac_new(bus_entire_ac_new(:,1)==idx, 3).^2 + ...
+                      bus_entire_ac_new(bus_entire_ac_new(:,1)==idx, 4).^2 );
+
+    genPower  = 0;
     if ismember(idx, genBusNums)
-        loadPower = sqrt( bus_entire_ac_new(find(bus_entire_ac_new(:, 1) == idx), 3).^2 + ...
-                           bus_entire_ac_new(find(bus_entire_ac_new(:, 1) == idx), 4).^2 );
-        genPower = sqrt( gen_entire_ac_new(find(gen_entire_ac_new(:, 1) == idx), 2).^2 + ...
-                          gen_entire_ac_new(find(gen_entire_ac_new(:, 1) == idx), 3).^2 );
-        if loadPower >= genPower
-            powerSize = 1e-3 + loadPower;
-            scatter(p.XData(idx), p.YData(idx), powerSize, [1 0 0], 'o', 'filled');
-            powerSize = genPower;
-            scatter(p.XData(idx), p.YData(idx), powerSize, [0 1 0], 'o', 'filled');
-            drawnow;
-        else
-            powerSize = genPower;
-            scatter(p.XData(idx), p.YData(idx), powerSize, [0 1 0], 'o', 'filled');
-            powerSize = 1e-3 + loadPower;
-            scatter(p.XData(idx), p.YData(idx), powerSize, [1 0 0], 'o', 'filled');
-            drawnow;
-        end
-    else
-        loadPower = sqrt( bus_entire_ac_new(find(bus_entire_ac_new(:, 1) == idx), 3).^2 + ...
-                           bus_entire_ac_new(find(bus_entire_ac_new(:, 1) == idx), 4).^2 );
-        powerSize = 1e-3 + loadPower;
-        scatter(p.XData(idx), p.YData(idx), powerSize, [1 0 0], 'o', 'filled');
-        drawnow;
+        genPower = sqrt( gen_entire_ac_new(gen_entire_ac_new(:,1)==idx, 2).^2 + ...
+                         gen_entire_ac_new(gen_entire_ac_new(:,1)==idx, 3).^2 );
+    end
+
+    resPower  = 0;
+    if ismember(idx, resBusNums)
+        resPower = sqrt( res_entire_ac_new(res_entire_ac_new(:,1)==idx, 2).^2 + ...
+                         res_entire_ac_new(res_entire_ac_new(:,1)==idx, 3).^2 );
+    end
+
+    % -------- Collect scatter --------
+    % Load（red）
+    xAll(end+1) = p.XData(idx);
+    yAll(end+1) = p.YData(idx);
+    sAll(end+1) = 1e-3 + loadPower;
+    cAll(end+1,:) = [1 0 0];          
+
+    % Generator（skyblue）
+    if genPower > 0
+        xAll(end+1) = p.XData(idx);
+        yAll(end+1) = p.YData(idx);
+        sAll(end+1) = genPower;
+        cAll(end+1,:) = [0.53 0.81 0.98];      
+    end
+
+    % RES (green)
+    if resPower > 0
+        xAll(end+1) = p.XData(idx);
+        yAll(end+1) = p.YData(idx);
+        sAll(end+1) = resPower;
+        cAll(end+1,:) = [0 0.6 0];   
     end
 end
+
+[~, order] = sort(sAll,'descend');   
+for k = order
+    scatter(xAll(k), yAll(k), sAll(k), cAll(k,:), 'o', 'filled');
+end
+drawnow;   
 
 %% Editing DC node---------------------------------------------------------
 dcIndices = find(ismember(nodeNums, dcBusNums));
@@ -258,14 +295,15 @@ for i = 1:numNodes
 end
 drawnow;
 
-%% Mark--------------------------------------------------------------------
+%% Legend--------------------------------------------------------------------
 markACLoad = scatter(NaN, NaN, 80, [1, 0, 0], 'o', 'filled');   
-markACGen  = scatter(NaN, NaN, 80, [0, 1, 0], 'o', 'filled');   
+markACGen  = scatter(NaN, NaN, 80, [0.53, 0.81, 0.98], 'o', 'filled');   
+markACRES  = scatter(NaN, NaN, 80, [0, 0.6, 0], 'o', 'filled');   
 markDCConv = scatter(NaN, NaN, 80, [0, 0, 1], '^', 'filled');   
 markLine = plot(NaN, NaN, 'color', [0.85, 0.5, 0.1], 'LineWidth', 1); 
 
-legend([markACLoad, markACGen, markDCConv, markLine], ...
-    {'AC Loads', 'AC Generators', 'VSC Converters', 'Branch Lines'}, ...
+legend([markACLoad, markACGen, markACRES, markDCConv, markLine], ...
+    {'AC Loads', 'AC Generators', 'AC RESs', 'VSC Converters', 'Branch Lines'}, ...
     'Location', 'southeast', 'FontSize', 10);
 
 end

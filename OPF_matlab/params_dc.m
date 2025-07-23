@@ -42,7 +42,7 @@ function [network_dc, baseMW_dc, bus_dc, branch_dc, conv_dc, pol_dc, nbuses_dc, 
     network_dc  = create_dc(caseName_dc);
     baseMW_dc   = network_dc.baseMW;
     bus_dc      = network_dc.bus;
-    branch_dc   = network_dc.branch;
+    branch_dc   = network_dc.branch(network_dc.branch(:, 11) == 1, :);
     pol_dc      = network_dc.pol;
     conv_dc     = network_dc.converter;
     baseKV_dc   = conv_dc(:, 14);

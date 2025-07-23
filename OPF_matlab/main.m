@@ -1,3 +1,18 @@
+%=======================================================
+%         __   __   __      __   __   ___       __       
+%    /\  /  ` |  \ /  ` __ /  \ |__) |__  |    /  \ |  | 
+%   /~~\ \__, |__/ \__,    \__/ |    |    |___ \__/ |/\| 
+%
+%========================================================
+%  Purpose : ACDC Optimal Power Flow Computation
+%  GitHub  : https://github.com/CRESYM/ACDC_OPF.git
+%  Version : v0.1
+%--------------------------------------------------------
+%  Contributors: Haixiao Li, Azadeh Kermansaravi, 
+%                Aleksandra Lekic
+%  Email       : haixiaoli.ee@gmail.com
+%  Created on  : 2025-05-01
+%--------------------------------------------------------                                                   
 %  References:
 %  [1] J. Beerten, S. Cole and R. Belmans, "Generalized Steady-State VSC MTDC Model 
 %  for Sequential AC/DC Power Flow Algorithms," in IEEE Transactions on Power Systems, 
@@ -6,7 +21,9 @@
 %  [3]  Matacdc1.0 unser's manual, https://www.esat.kuleuven.be/electa/teaching/matacdc/MatACDCManual
 
 clc; clear all; close all;
-solve_opf('mtdc3slack_a', 'ac9ac14', ...
+
+% Remind: move ac/dc .csv files in "ACDC_CSV" folder to "OPF_matlab" folder
+solve_opf('mtdc3slack_a', 'ac14ac57', ...
           'vscControl', true, ...
           'writeTxt', false, ...
           'plotResult', false);
