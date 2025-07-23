@@ -2,6 +2,7 @@ import time
 import itertools
 import os         
 import sys  
+import math
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -57,17 +58,21 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
     branch_entire_ac    = res_params_ac["branch_entire_ac"]
     generator_entire_ac = res_params_ac["generator_entire_ac"]
     gencost_entire_ac   = res_params_ac["gencost_entire_ac"]
+    res_entire_ac       = res_params_ac["res_entire_ac"]
     ngrids              = res_params_ac["ngrids"]
     bus_ac              = res_params_ac["bus_ac"]
     branch_ac           = res_params_ac["branch_ac"]
     generator_ac        = res_params_ac["generator_ac"]
     gencost_ac          = res_params_ac["gencost_ac"]
+    res_ac              = res_params_ac["res_ac"]
     recRef_ac           = res_params_ac["recRef_ac"]
     pd_ac               = res_params_ac["pd_ac"]
     qd_ac               = res_params_ac["qd_ac"]
+    sres_ac             = res_params_ac["sres_ac"]
     nbuses_ac           = res_params_ac["nbuses_ac"]
     nbranches_ac        = res_params_ac["nbranches_ac"]
     ngens_ac            = res_params_ac["ngens_ac"]
+    nress_ac            = res_params_ac["nress_ac"]
     GG_ac               = res_params_ac["GG_ac"]
     BB_ac               = res_params_ac["BB_ac"]
     GG_ft_ac            = res_params_ac["GG_ft_ac"]
@@ -111,25 +116,28 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
         # ----------------------------
         # Print AC Grid Bus Data
         # ---------------------------- 
-        print("================================================================================", file=io)
-        print("|   AC  Bus Data                                                               |", file=io)
-        print("================================================================================", file=io)
-        print("Area     Bus       Voltage             Generation               Load        ", file=io)
-        print("#        #     Mag [pu] Ang [deg]   Pg [MW]  Qg [MVAr]    P [MW]  Q [MVAr]", file=io)
-        print("-----   -----  --------  --------  --------  ---------   ------  --------", file=io)
+        print("=======================================================================================", file=io)
+        print("|   AC Grid Bus Data                                                                  |", file=io)
+        print("=======================================================================================", file=io)
+        print("Area     Bus   Voltage       Generation             Load                 RES", file=io)
+        print("#        #     Mag [pu]  Pg [MW]  Qg [MVAr]    P [MW]  Q [MVAr]  Pres [MW]  Qres [MVAr]", file=io)
+        print("-----   -----  --------  --------  --------  ---------   ------  ---------  -----------", file=io)
         formatted_vm_ac = {ng: [np.sqrt(value(model.vn2_ac[ng, i])) for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
         formatted_pgen_ac = {ng: [value(model.pgen_ac[ng, j]) * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
         formatted_qgen_ac = {ng: [value(model.qgen_ac[ng, j]) * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
+        formatted_pres_ac = {ng: [value(model.pres_ac[ng, j]) * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
+        formatted_qres_ac = {ng: [value(model.qres_ac[ng, j]) * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
         formatted_pd_ac = {ng: [pd_ac[ng][i] * baseMVA_ac for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
         formatted_qd_ac = {ng: [qd_ac[ng][i] * baseMVA_ac for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
         for ng in range(ngrids):
             genidx = [int(generator_ac[ng][j, 0]) for j in range(ngens_ac[ng])]  
+            residx = [int(res_ac[ng][j, 0]) for j in range(nress_ac[ng])]  
             for i in range(nbuses_ac[ng]):
                 printed_vm_ac = formatted_vm_ac[ng][i]
                 if i == 0 and ng == 0:
-                    print(f"{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}{0.0:10.1f}", end="", file=io)
+                    print(f"{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}", end="", file=io)
                 else:
-                    print(f"\n{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}{0.0:10.1f}", end="", file=io)
+                    print(f"\n{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}", end="", file=io)
 
                 if i in recRef_ac[ng]:
                     print("*", end="", file=io)
@@ -153,8 +161,16 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
                     printed_pd = formatted_pd_ac[ng][i]
                     printed_qd = formatted_qd_ac[ng][i]
                     print(f"{printed_pd:12.3f}{printed_qd:9.3f}", end="", file=io)
-            
-        print("\n-----   -----  --------  --------  --------  ---------   ------  --------", file=io)
+
+                if i + 1 in residx:
+                    res_idx = residx.index(i + 1)
+                    printed_pres = formatted_pres_ac[ng][res_idx]
+                    printed_qres = formatted_qres_ac[ng][res_idx]
+                    print(f"{printed_pres:11.3f}{printed_qres:13.3f}", end="", file=io)
+                else:
+                    print("          -            -",  end="", file=io)
+
+        print("\n-----   -----  --------  --------  --------  ---------   ------  ---------  -----------", file=io)
         
         totalGenerationCost = value(model.objective)
         print(f"The total generation costs is ＄{totalGenerationCost:.2f}/MWh (€{totalGenerationCost / 1.08:.2f}/MWh)", file=io)
@@ -164,7 +180,7 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
         # Print AC Grid Branch Data
         # ----------------------------
         print("===========================================================================================", file=io)
-        print("|     AC Grids Branch Data                                                                |", file=io)
+        print("|     AC Grid Branch Data                                                                 |", file=io)
         print("===========================================================================================", file=io)
         print("Area   Branch  From   To        From Branch Flow         To Branch Flow        Branch Loss", file=io)
         print("#      #       Bus#   Bus#    Pij [MW]   Qij [MVAr]    Pij [MW]   Qij [MVAr]  Pij_loss [MW]", file=io)
@@ -200,7 +216,8 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
                 print(f"{ng+1:2} {i+1:6} {printed_fbus_ac:7} {printed_tbus_ac:6}"
                     f" {printed_pij_from_to:12.3f} {printed_qij_from_to:11.3f}"
                     f" {printed_pij_to_from:12.3f} {printed_qij_to_from:11.3f} {printed_pij_loss_ac:11.3f}", file=io)
-        print("----   ------  -----  -----  ---------  -----------    --------  ----------  -------------")
+        
+        print("----   ------  -----  -----  ---------  -----------    --------  ----------  -------------", file=io)
         
         print(f"The total AC network losses is {totalACPowerLoss:.3f} MW\n", file=io)
         print("\n", file=io)
@@ -275,28 +292,32 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
      Stc_dc_k, Cct_dc_k, Sct_dc_k, convPloss_dc_k) = extract_vals_dc(model, nbuses_dc, nconvs_dc)
     
     (vn2_ac_k, pn_ac_k, qn_ac_k, pgen_ac_k, qgen_ac_k,
-     pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k) = extract_vals_ac(model, ngrids, nbuses_ac, ngens_ac)
+     pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k, pres_ac_k, qres_ac_k) = extract_vals_ac(model, ngrids, nbuses_ac, ngens_ac, nress_ac)
     
     if plotResult:
         viz_opf(
         bus_entire_ac,
         branch_entire_ac,
+        generator_entire_ac,
+        res_entire_ac,
+        pgen_ac_k,
+        qgen_ac_k,
+        pij_ac_k,
+        qij_ac_k,
+        pres_ac_k,
+        qres_ac_k,
+        vn2_ac_k,
+        baseMVA_ac,
         bus_dc,
         branch_dc,
         conv_dc,
-        generator_entire_ac,
-        pgen_ac_k,
-        qgen_ac_k,
-        baseMVA_ac,
-        vn2_ac_k,
-        vn2_dc_k,
-        pij_ac_k,
-        qij_ac_k,
         pij_dc_k,
         ps_dc_k,
         qs_dc_k,
+        vn2_dc_k,
+        pol_dc,
         baseMW_dc,
-        pol_dc)
+        )
 
     return model
 
@@ -626,10 +647,13 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
     ngrids          = res_params_ac["ngrids"]
     nbuses_ac       = res_params_ac["nbuses_ac"]
     ngens_ac        = res_params_ac["ngens_ac"]
+    nress_ac        = res_params_ac["nress_ac"]
     bus_ac          = res_params_ac["bus_ac"]
     generator_ac    = res_params_ac["generator_ac"]
+    res_ac          = res_params_ac["res_ac"]
     BB_ac           = res_params_ac["BB_ac"]
     GG_ac           = res_params_ac["GG_ac"]
+    sres_ac         = res_params_ac["sres_ac"]
 
     # Pre-allocate 
     lb_ac = [None] * ngrids
@@ -637,16 +661,14 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
     
      # --- Initialization (a totoal of 9 kinds of variables) ---
     for ng in range(ngrids):
-        lb_ac[ng] = [None] * 9
-        ub_ac[ng] = [None] * 9
+        lb_ac[ng] = [None] * 11
+        ub_ac[ng] = [None] * 11
         lb_default = -1e4
         ub_default = 1e4
-        nbuses = nbuses_ac[ng]
-        ngens = ngens_ac[ng]
-    
+
     # --- 1 AC nodal voltage squared -vn2_ac: nbuses x 1 ---
     model.vn2_ac = Var(
-        [(ng, i) for ng in range(ngrids) for i in range(nbuses)],
+        [(ng, i) for ng in range(ngrids) for i in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
         lb_ac[ng][0] = bus_ac[ng][:, 12] **2
@@ -657,29 +679,29 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
 
     # --- 2 AC active power injection -pn_ac: nbuses x 1 ---
     model.pn_ac = Var(
-        [(ng, i) for ng in range(ngrids) for i in range(nbuses)],
+        [(ng, i) for ng in range(ngrids) for i in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
-        lb_ac[ng][1] = np.full(nbuses, lb_default)
-        ub_ac[ng][1] = np.full(nbuses, ub_default)
+        lb_ac[ng][1] = np.full(nbuses_ac[ng], lb_default)
+        ub_ac[ng][1] = np.full(nbuses_ac[ng], ub_default)
         for i in range(nbuses_ac[ng]):
             model.addconstraints.add(model.pn_ac[ng, i] >= lb_ac[ng][1][i])
             model.addconstraints.add(model.pn_ac[ng, i] <= ub_ac[ng][1][i])
 
     # --- 3 AC reactive power injection -qn_ac: nbuses x 1 ---
     model.qn_ac = Var(
-        [(ng, i) for ng in range(ngrids) for i in range(nbuses)],
+        [(ng, i) for ng in range(ngrids) for i in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
-        lb_ac[ng][2] = np.full(nbuses, lb_default)
-        ub_ac[ng][2] = np.full(nbuses, ub_default)
+        lb_ac[ng][2] = np.full(nbuses_ac[ng], lb_default)
+        ub_ac[ng][2] = np.full(nbuses_ac[ng], ub_default)
         for i in range(nbuses_ac[ng]):
             model.addconstraints.add(model.qn_ac[ng, i] >= lb_ac[ng][2][i])
             model.addconstraints.add(model.qn_ac[ng, i] <= ub_ac[ng][2][i])
     
     # --- 4 AC generator active power output -pgen_ac: ngens x 1 ---
     model.pgen_ac = Var(
-        [(ng, i) for ng in range(ngrids) for i in range(ngens)],
+        [(ng, i) for ng in range(ngrids) for i in range(ngens_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
         lb_ac[ng][3] = generator_ac[ng][:, 9] * generator_ac[ng][:, 7] / baseMVA_ac
@@ -690,7 +712,7 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
         
     # --- 5 AC generator reactive power output -qgen_ac: ngens x 1 ---
     model.qgen_ac = Var(
-        [(ng, i) for ng in range(ngrids) for i in range(ngens)],
+        [(ng, i) for ng in range(ngrids) for i in range(ngens_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
         lb_ac[ng][4] = generator_ac[ng][:, 4] * generator_ac[ng][:, 7] / baseMVA_ac
@@ -701,35 +723,35 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
 
     # --- 6 AC branch active power flow  -pij_ac: nbuses x nbuses ---
     model.pij_ac = Var(
-        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses) for j in range(nbuses)],
+        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses_ac[ng]) for j in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
-        lb_ac[ng][5] = np.full((nbuses, nbuses), lb_default)
-        ub_ac[ng][5] = np.full((nbuses, nbuses), ub_default)
-        for i in range(ngens_ac[ng]):
-            for j in range(ngens_ac[ng]):
+        lb_ac[ng][5] = np.full((nbuses_ac[ng], nbuses_ac[ng]), lb_default)
+        ub_ac[ng][5] = np.full((nbuses_ac[ng], nbuses_ac[ng]), ub_default)
+        for i in range(nbuses_ac[ng]):
+            for j in range(nbuses_ac[ng]):
                 model.addconstraints.add(model.pij_ac[ng, i, j] >= lb_ac[ng][5][i, j])
                 model.addconstraints.add(model.pij_ac[ng, i, j] <= ub_ac[ng][5][i, j])
 
     # --- 7 AC branch reactive power flow -qij_ac: nbuses x nbuses ---
     model.qij_ac = Var(
-        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses) for j in range(nbuses)],
+        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses_ac[ng]) for j in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
-        lb_ac[ng][6] = np.full((nbuses, nbuses), lb_default)
-        ub_ac[ng][6] = np.full((nbuses, nbuses), ub_default)
-        for i in range(ngens_ac[ng]):
-            for j in range(ngens_ac[ng]):
+        lb_ac[ng][6] = np.full((nbuses_ac[ng], nbuses_ac[ng]), lb_default)
+        ub_ac[ng][6] = np.full((nbuses_ac[ng], nbuses_ac[ng]), ub_default)
+        for i in range(nbuses_ac[ng]):
+            for j in range(nbuses_ac[ng]):
                 model.addconstraints.add(model.qij_ac[ng, i, j] >= lb_ac[ng][6][i, j])
                 model.addconstraints.add(model.qij_ac[ng, i, j] <= ub_ac[ng][6][i, j])
 
     # --- 8 AC SOC relaxed term no.1 -ss_ac: nbuses x nbuses ---
     model.ss_ac = Var(
-        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses) for j in range(nbuses)],
+        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses_ac[ng]) for j in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):
-        lb_ac[ng][7] = np.full((nbuses, nbuses), lb_default)
-        ub_ac[ng][7] = np.full((nbuses, nbuses), ub_default)
+        lb_ac[ng][7] = np.full((nbuses_ac[ng], nbuses_ac[ng]), lb_default)
+        ub_ac[ng][7] = np.full((nbuses_ac[ng], nbuses_ac[ng]), ub_default)
         for i in range(ngens_ac[ng]):
             for j in range(ngens_ac[ng]):
                 model.addconstraints.add(model.ss_ac[ng, i, j] >= lb_ac[ng][7][i, j])
@@ -737,15 +759,37 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
 
     # --- 9 AC SOC relaxed term no.2 -cc_ac: nbuses x nbuses ---
     model.cc_ac = Var(
-        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses) for j in range(nbuses)],
+        [(ng, i, j) for ng in range(ngrids) for i in range(nbuses_ac[ng]) for j in range(nbuses_ac[ng])],
         domain=Reals)
     for ng in range(ngrids):           
-        lb_ac[ng][8] = np.full((nbuses, nbuses), lb_default)
-        ub_ac[ng][8] = np.full((nbuses, nbuses), ub_default)
-        for i in range(ngens_ac[ng]):
-            for j in range(ngens_ac[ng]):
+        lb_ac[ng][8] = np.full((nbuses_ac[ng], nbuses_ac[ng]), lb_default)
+        ub_ac[ng][8] = np.full((nbuses_ac[ng], nbuses_ac[ng]), ub_default)
+        for i in range(nbuses_ac[ng]):
+            for j in range(nbuses_ac[ng]):
                 model.addconstraints.add(model.cc_ac[ng, i, j] >= lb_ac[ng][8][i, j])
                 model.addconstraints.add(model.cc_ac[ng, i, j] <= ub_ac[ng][8][i, j])
+
+    # --- 10 AC RES active power output -pres_ac: nress x 1 ---
+    model.pres_ac = Var(
+        [(ng, i) for ng in range(ngrids) for i in range(nress_ac[ng])],
+        domain=Reals)
+    for ng in range(ngrids):
+        lb_ac[ng][9] = np.full(nress_ac[ng], 0)
+        ub_ac[ng][9] = res_ac[ng][:, 1] / baseMVA_ac
+        for i in range(nress_ac[ng]):
+            model.addconstraints.add(model.pres_ac[ng, i] >= lb_ac[ng][9][i])
+            model.addconstraints.add(model.pres_ac[ng, i] <= ub_ac[ng][9][i])
+
+    # --- 11 AC RES reactive power output -qres_ac: nress x 1 ---
+    model.qres_ac = Var(
+        [(ng, i) for ng in range(ngrids) for i in range(nress_ac[ng])],
+        domain=Reals)
+    for ng in range(ngrids):
+        lb_ac[ng][10] = np.full(nress_ac[ng], lb_default)
+        ub_ac[ng][10] = np.full(nress_ac[ng], ub_default)
+        for i in range(nress_ac[ng]):
+            model.addconstraints.add(model.qres_ac[ng, i] >= lb_ac[ng][10][i])
+            model.addconstraints.add(model.qres_ac[ng, i] <= ub_ac[ng][10][i])
 
       
     for ng in range(ngrids):
@@ -790,6 +834,18 @@ def setup_ac(model:ConcreteModel, res_params_ac: Dict[str, Any]) -> None:
             model.addconstraints.add(model.ss_ac[ng, i, j] + model.ss_ac[ng, j, i] == 0)
             model.addconstraints.add(model.cc_ac[ng, i, j]**2 + model.ss_ac[ng, i, j]**2 <= model.cc_ac[ng, i, i] * model.cc_ac[ng, j, j])
 
+        # ------------------------------
+        # AC RES Capacity Constraints (Polygon approximation)
+        # ------------------------------
+        for k in range(8):
+            ck = math.cos(k * math.pi / 8)
+            sk = math.sin(k * math.pi / 8)
+            for i in range(nress_ac[ng]):
+                model.addconstraints.add(ck * model.pres_ac[ng, i] + sk * model.qres_ac[ng, i] <= sres_ac[ng][i])
+                model.addconstraints.add(-sres_ac[ng][i] <= ck * model.pres_ac[ng, i] + sk * model.qres_ac[ng, i])
+
+        
+
 """
 === setup_cp ===
 
@@ -806,22 +862,24 @@ Inputs:
 def setup_cp(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac: Dict[str, Any]) -> None:
     
     # Extract required parameters
-    ngrids      = res_params_ac["ngrids"]
-    nbuses_ac   = res_params_ac["nbuses_ac"]
-    ngens_ac    = res_params_ac["ngens_ac"]
-    generator_ac = res_params_ac["generator_ac"]
-    pd_ac       = res_params_ac["pd_ac"]
-    qd_ac       = res_params_ac["qd_ac"]
-    conv_dc     = res_params_dc["conv_dc"]
-    nconvs_dc   = res_params_dc["nconvs_dc"]
+    ngrids          = res_params_ac["ngrids"]
+    nbuses_ac       = res_params_ac["nbuses_ac"]
+    ngens_ac        = res_params_ac["ngens_ac"]
+    nress_ac        = res_params_ac["nress_ac"]
+    generator_ac    = res_params_ac["generator_ac"]
+    res_ac          = res_params_ac["res_ac"]
+    pd_ac           = res_params_ac["pd_ac"]
+    qd_ac           = res_params_ac["qd_ac"]
+    conv_dc         = res_params_dc["conv_dc"]
+    nconvs_dc       = res_params_dc["nconvs_dc"]
 
     # Loop over each AC grid to set up nodal power balance constraints
     for ng in range(ngrids): 
         pm_ac = {i: 0.0 for i in range(nbuses_ac[ng])}
         qm_ac = {i: 0.0 for i in range(nbuses_ac[ng])}
         
-        for i in range(ngens_ac[ng]):
         #  If the AC node connected with generator
+        for i in range(ngens_ac[ng]):
             index = int(generator_ac[ng][i, 0]) - 1
             pm_ac[index] += model.pgen_ac[ng, i]
             qm_ac[index] += model.qgen_ac[ng, i]
@@ -831,6 +889,12 @@ def setup_cp(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac: 
                 index = int(conv_dc[i, 1]) - 1
                 pm_ac[index] -= model.ps_dc[i]
                 qm_ac[index] -= model.qs_dc[i]
+        # If the AC node connected with RES
+        for i in range(nress_ac[ng]):
+            index = int(res_ac[ng][i, 0]) - 1
+            pm_ac[index] += model.pres_ac[ng, i]
+            qm_ac[index] += model.qres_ac[ng, i]
+
         #  Every AC node have load 
         for i in range(nbuses_ac[ng]):
             model.addconstraints.add(model.pn_ac[ng, i] == pm_ac[i] - pd_ac[ng][i])
@@ -861,16 +925,20 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
     ngrids = res_params_ac["ngrids"]
     generator_ac = res_params_ac["generator_ac"]
     gencost_ac = res_params_ac["gencost_ac"]
+    res_ac = res_params_ac["res_ac"]
     baseMVA_ac = res_params_ac["baseMVA_ac"]
     ngens_ac = res_params_ac["ngens_ac"]
+    nress_ac = res_params_ac["nress_ac"]
    
     # Pre-allocate 
     obj = [None] * ngrids
     actgen_ac = [None] * ngrids
+    actres_ac = [None] * ngrids
 
-    # Define generation costs
+    # Define generation and RES costs
     for ng in range(ngrids):
-        actgen_ac[ng] = generator_ac[ng][:, 7]   
+        actgen_ac[ng] = generator_ac[ng][:, 7] 
+        actres_ac[ng] = res_ac[ng][:, 10]  
          # Quadratic cost type
         if gencost_ac[ng][0, 3] == 3: 
             obj[ng] = sum(
@@ -880,8 +948,17 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
                     gencost_ac[ng][i, 6]
                 ) for i in range(ngens_ac[ng])
             )
+        if res_ac[ng][0, 6] == 3: 
+            obj[ng] += sum(
+                actres_ac[ng][i] * (
+                    baseMVA_ac**2 * res_ac[ng][i, 7] * model.pres_ac[ng, i]**2 +
+                    baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
+                    res_ac[ng][i, 9]
+                ) for i in range(nress_ac[ng])
+            )
+
         # Linear cost type
-        elif gencost_ac[ng][0, 3] == 2:  
+        if gencost_ac[ng][0, 3] == 2:  
              obj[ng] = sum(
                 actgen_ac[ng][i] * (
                     baseMVA_ac * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i] +
@@ -889,8 +966,15 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
                 ) for i in range(ngens_ac[ng])
             )
              
-        else:
-            raise ValueError(f"Unsupported generator cost type in grid {ng}")
+        if res_ac[ng][0, 6] == 2:  
+             obj[ng] += sum(
+                actres_ac[ng][i] * (
+                    baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
+                    res_ac[ng][i, 9]
+                ) for i in range(nress_ac[ng])
+            )
+             
+       
        
     def objective_rule(model):
         return sum(obj[ng] for ng in range(ngrids))
@@ -943,6 +1027,7 @@ def extract_vals_ac(
     ngrids: int,
     nbuses_ac: int,
     ngens_ac: int,
+    nress_ac: int,
 ) -> None:
     """
     Extract AC side optimization variable values from the model.
@@ -961,14 +1046,15 @@ def extract_vals_ac(
     qij_ac_k  = []
     ss_ac_k   = []
     cc_ac_k   = []
+    pres_ac_k = []
+    qres_ac_k = []
     
     for ng in range(ngrids):
         vn2 = np.array([value(model.vn2_ac[ng, i]) for i in range(nbuses_ac[ng])])
         pn  = np.array([value(model.pn_ac[ng, i]) for i in range(nbuses_ac[ng])])
         qn  = np.array([value(model.qn_ac[ng, i]) for i in range(nbuses_ac[ng])])
         pgen = np.array([value(model.pgen_ac[ng, i]) for i in range(ngens_ac[ng])])
-        qgen = np.array([value(model.qgen_ac[ng, i]) for i in range(ngens_ac[ng])])
-        
+        qgen = np.array([value(model.qgen_ac[ng, i]) for i in range(ngens_ac[ng])])   
         pij = np.array([[value(model.pij_ac[ng, i, j]) for j in range(nbuses_ac[ng])]
                         for i in range(nbuses_ac[ng])])
         qij = np.array([[value(model.qij_ac[ng, i, j]) for j in range(nbuses_ac[ng])]
@@ -977,6 +1063,8 @@ def extract_vals_ac(
                        for i in range(nbuses_ac[ng])])
         cc = np.array([[value(model.cc_ac[ng, i, j]) for j in range(nbuses_ac[ng])]
                        for i in range(nbuses_ac[ng])])
+        pres = np.array([value(model.pres_ac[ng, i]) for i in range(nress_ac[ng])])
+        qres = np.array([value(model.qres_ac[ng, i]) for i in range(nress_ac[ng])])  
         
         vn2_ac_k.append(vn2)
         pn_ac_k.append(pn)
@@ -987,9 +1075,11 @@ def extract_vals_ac(
         qij_ac_k.append(qij)
         ss_ac_k.append(ss)
         cc_ac_k.append(cc)
+        pres_ac_k.append(pres)
+        qres_ac_k.append(qres)
     
     return (vn2_ac_k, pn_ac_k, qn_ac_k, pgen_ac_k, qgen_ac_k,
-            pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k)
+        pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k, pres_ac_k, qres_ac_k)
     
    
 if __name__ == "__main__":

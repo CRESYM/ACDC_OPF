@@ -162,16 +162,19 @@ def params_ac(acgrid_name: str) -> dict:
         - branch_entire_ac      : ndarray (float64). Complete branch data.
         - generator_entire_ac   : ndarray (float64). Complete generator data.
         - gencost_entire_ac     : ndarray (float64). Complete generation cost data.
+        - res_entire_ac         : ndarray (float64). Complete RES data.
         - bus_ac                : list[ndarray (float64)]. Bus data for each AC grid.
         - branch_ac             : list[ndarray (float64)]. Branch data for each AC grid.
         - generator_ac          : list[ndarray (float64)]. Generator data for each AC grid.
         - gencost_ac            : list[ndarray (float64)]. Generator cost for each AC grid.
+        - res_ac                : list[ndarray (float64)]. RES data for each AC grid.
         - recRef_ac             : list[ndarry [int64]]. Recording the reference bus for each AC grid.
         - pd_ac                 : list[ndarray (float64)]. Active/reactive loads (per unit).
         - qd_ac                 : list[ndarray (float64)]. Mapping AC bus IDs to connected DC converters.
         - nbuses_ac             : list[int64]. Number of buses for each AC grid.
         - nbranches_ac          : list[int64]. Number of branches for each AC grid.
         - ngens_ac              : list[int64]. Number of generators for each AC grid.
+        - nress_ac              : list[int64]. Number of RESs for each AC grid.
         - GG_ac, BB_ac          : list[ndarray (float64)]. Real and Imaginary parts of the AC admittance matrix (per unit).
         - GG_ft_ac, BB_ft_ac    : list[ndarray (float64)]. Branch off-diagonal entries (from-to) (per unit).
         - GG_tf_ac, BB_tf_ac    : list[ndarray (float64)]. Branch off-diagonal entries (to-from) (per unit).
@@ -189,6 +192,7 @@ def params_ac(acgrid_name: str) -> dict:
     branch_entire_ac = np.array(network_ac["branch"], dtype = np.float64)[np.array(network_ac["branch"])[:, 10] == 1]
     generator_entire_ac = np.array(network_ac["generator"], dtype = np.float64)
     gencost_entire_ac = np.array(network_ac["gencost"], dtype = np.float64)
+    res_entire_ac = np.array(network_ac["res"], dtype = np.float64)
     ngrids = np.int64(len(np.unique(bus_entire_ac[:, 13])))
     
     #--------------------------------------------------------------------------
@@ -198,11 +202,14 @@ def params_ac(acgrid_name: str) -> dict:
     branch_ac = [None] * ngrids
     generator_ac = [None] * ngrids
     gencost_ac = [None] * ngrids
+    res_ac = [None] * ngrids
     pd_ac = [None] * ngrids
     qd_ac = [None] * ngrids
+    sres_ac = [None] * ngrids
     nbuses_ac = [0] * ngrids
     nbranches_ac = [0] * ngrids
     ngens_ac = [0] * ngrids
+    nress_ac = [0] * ngrids
     
     # AC network admittance components for each grid
     YY_ac = [None] * ngrids
@@ -234,11 +241,13 @@ def params_ac(acgrid_name: str) -> dict:
         branch_ac[ng] = branch_entire_ac[branch_entire_ac[:, 13] == ng + 1]
         generator_ac[ng] = generator_entire_ac[generator_entire_ac[:, 21] == ng + 1]
         gencost_ac[ng] = gencost_entire_ac[gencost_entire_ac[:, 7] == ng + 1]
+        res_ac[ng] = res_entire_ac[res_entire_ac[:, 11] == ng + 1]
 
         # Record the number of buses and branches in grid #ng
         nbuses_ac[ng] = np.int64(bus_ac[ng].shape[0])
         nbranches_ac[ng] = np.int64(branch_ac[ng].shape[0])
         ngens_ac[ng] = np.int64(generator_ac[ng].shape[0])
+        nress_ac[ng] = np.int64(res_ac[ng].shape[0])
 
         # Record the reference bus index in grid #ng
         IDtoCountmap[ng] = np.zeros(nbuses_ac[ng], dtype=np.int64)
@@ -266,6 +275,9 @@ def params_ac(acgrid_name: str) -> dict:
         pd_ac[ng] = bus_ac[ng][:, 2] / baseMVA_ac
         qd_ac[ng] = bus_ac[ng][:, 3] / baseMVA_ac
 
+        # Normalize RES capacity
+        sres_ac[ng] = res_ac[ng][:, 2] / baseMVA_ac
+
     return {
         "network_ac": network_ac,
         "baseMVA_ac": baseMVA_ac,
@@ -273,17 +285,21 @@ def params_ac(acgrid_name: str) -> dict:
         "branch_entire_ac": branch_entire_ac,
         "generator_entire_ac": generator_entire_ac,
         "gencost_entire_ac": gencost_entire_ac,
+        "res_entire_ac": res_entire_ac,
         "ngrids": ngrids,
         "bus_ac": bus_ac,
         "branch_ac": branch_ac,
         "generator_ac": generator_ac,
         "gencost_ac": gencost_ac,
+        "res_ac": res_ac,
         "recRef_ac": recRef_ac,
         "pd_ac": pd_ac,
         "qd_ac": qd_ac,
+        "sres_ac": sres_ac,
         "nbuses_ac": nbuses_ac,
         "nbranches_ac": nbranches_ac,
         "ngens_ac": ngens_ac,
+        "nress_ac": nress_ac,
         "GG_ac": GG_ac,
         "BB_ac": BB_ac,
         "GG_ft_ac": GG_ft_ac,

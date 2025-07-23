@@ -10,46 +10,52 @@ from typing import Sequence
 This function is used to visualize AC/DC OPF results 
 
 The following optimized varaibles are required for OPF visulization
-    - bus_entire_ac         : Complete bus data from the AC network
-    - branch_entire_ac      : Complete branch data from the AC network
-    - gen_entire_ac         : Complete generator data from the AC network
-    - baseMVA_ac            : AC system base MVA value
-    - pgen_ac_k             : Optimized resutls of generator active power
-    - qgen_ac_k             : Optimized results of generator reactive power
-    - vn2_ac_k              : Optimized results of the squared AC voltage
-    - pij_ac_k              : Optimized results of the AC branch active power
-    - qij_ac_k              : Optimized results of the AC branch reactive power
+    - bus_entire_ac         : Complete bus data from the AC network.
+    - branch_entire_ac      : Complete branch data from the AC network.
+    - gen_entire_ac         : Complete generator data from the AC network.
+    - res_entire_ac         : Complete RES data from the DC network.
+    - pgen_ac_k             : Optimized resutls of generator active power.
+    - qgen_ac_k             : Optimized results of generator reactive power.
+    - pij_ac_k              : Optimized results of the AC branch active power.
+    - qij_ac_k              : Optimized results of the AC branch reactive power.
+    - pres_ac_k             : Optimized results of the AC RES active power.
+    - qres_ac_k             : Optimized results of the AC RES reactive power.
+    - vn2_ac_k              : Optimized results of the squared AC voltage.
+    - baseMVA_ac            : AC system base MVA value.
 
     - bus_dc:               : Bus data from the DC network.
     - branch_dc:            : Branch data from the DC network.
     - conv_dc:              : Converter data.
-    - baseMW_dc:            : DC system base MW value.
-    - pol_dc:               : Polarity of the DC network
-    - vn2_dc_k:             : Optimized results of the DC network
     - pij_dc_k:             : Optimized resutls of the DC branch active power.
     - ps_dc_k:              : Optimized results of the VSC PCC active power.
     - qs_dc_k:              : Optimized results of the VSC PCC reactive power.
+    - vn2_dc_k:             : Optimized results of the squared DC voltage
+    - pol_dc:               : Polarity of the DC network.
+    - baseMW_dc:            : DC system base MW value.
 
 """
 def viz_opf(
     bus_entire_ac:        np.ndarray,           
-    branch_entire_ac:     np.ndarray,          
-    bus_dc:               np.ndarray,       
-    branch_dc:            np.ndarray,          
-    conv_dc:              np.ndarray,          
-    generator_entire_ac:  np.ndarray,          
+    branch_entire_ac:     np.ndarray,                  
+    generator_entire_ac:  np.ndarray,    
+    res_entire_ac:        np.ndarray,      
     pgen_ac_k:            Sequence[np.ndarray],  
-    qgen_ac_k:            Sequence[np.ndarray],  
-    baseMVA_ac:           float,                 
-    vn2_ac_k:             Sequence[np.ndarray],  
-    vn2_dc_k:             np.ndarray,         
+    qgen_ac_k:            Sequence[np.ndarray],                        
     pij_ac_k:             Sequence[np.ndarray],  
     qij_ac_k:             Sequence[np.ndarray], 
+    pres_ac_k:            Sequence[np.ndarray], 
+    qres_ac_k:            Sequence[np.ndarray], 
+    vn2_ac_k:             Sequence[np.ndarray],   
+    baseMVA_ac:           float,  
+    bus_dc:               np.ndarray, 
+    branch_dc:            np.ndarray,          
+    conv_dc:              np.ndarray, 
     pij_dc_k:             np.ndarray,          
     ps_dc_k:              np.ndarray,            
     qs_dc_k:              np.ndarray,           
-    baseMW_dc:            float,                
-    pol_dc:               float,              
+    vn2_dc_k:             np.ndarray,                     
+    pol_dc:               float,  
+    baseMW_dc:            float,            
 ) -> None:
     
     # -------------------------------
@@ -109,19 +115,30 @@ def viz_opf(
     gen_entire_ac_new[:, 1] = np.concatenate(pgen_ac_k) * baseMVA_ac
     gen_entire_ac_new[:, 2] = np.concatenate(qgen_ac_k) * baseMVA_ac
 
+    # -------------------------------
+    # Reorder RES Data
+    # -------------------------------
+    mappingMatrixRES = np.column_stack((bus_entire_ac[:, 0], bus_entire_ac_new[:, 0], bus_entire_ac[:, -1]))
+    idxRES = ismember_rows(res_entire_ac[:, [0, -1]], mappingMatrixRES[:, [0, 2]])
+    res_entire_ac_new = res_entire_ac.copy()
+    res_entire_ac_new[:, 0] = mappingMatrixGen[idxRES, 1]
+    res_entire_ac_new[:, 1] = np.concatenate(pres_ac_k) * baseMVA_ac
+    res_entire_ac_new[:, 2] = np.concatenate(qres_ac_k) * baseMVA_ac
 
     # -------------------------------
-    # Define Node
+    # Get Node Number
     # -------------------------------
     nodeNums = np.concatenate((bus_entire_ac_new[:, 0], bus_dc_new[:, 0]))
     numNodes = numBuses_ac + numBuses_dc 
     acNodes = bus_entire_ac_new[:, 0]
     dcNodes = bus_dc_new[:, 0]
     genNodes = gen_entire_ac_new[:, 0]
+    resNodes = res_entire_ac_new[:, 0]
     
     # -------------------------------
     # Construct Network Graph
     # -------------------------------
+    # Combine branch "from" and "to" nodes for AC, DC and converter branches
     fromNode = np.concatenate((branch_entire_ac_new[:, 0],
                               branch_dc_new[:, 0],
                               conv_dc_new[:, 0]))
@@ -130,9 +147,8 @@ def viz_opf(
                              branch_dc_new[:, 1],
                              conv_dc_new[:, 1]))
     
+    # Get node coordinates 
     allNodes = np.unique(np.concatenate((fromNode, toNode)))
-
-
     edges = list(zip(fromNode, toNode))
     G = nx.from_edgelist(edges)
 
@@ -143,48 +159,63 @@ def viz_opf(
     sorted_nodes = sorted(G.nodes)
     mapping = {node: node for node in sorted_nodes}
     G = nx.relabel_nodes(G, mapping)
-
     fig, ax = plt.subplots()
     ax.axis('off')
-
     pos = nx.spring_layout(G, seed=1234)
 
     ax.set_title("AC/DC OPF Results", fontsize=12, fontweight='bold')
 
+    # -------------------------------
+    # Edito Node Size Related to Power 
+    # -------------------------------
     numEdges = G.number_of_edges()
     edgeColors = np.zeros((numEdges, 3))
     numACedges = branch_entire_ac_new.shape[0]
     numDCedges = branch_dc_new.shape[0]
     numConvEdges = conv_dc_new.shape[0]
 
-    factor = 2
-    for idx, coord in pos.items():
-        if idx in acNodes:
-            labels = { node: str(node) for node in pos.keys() }
-            if idx in genNodes:
-                idx_ac = np.where(bus_entire_ac_new[:, 0] == idx)[0]
-                loadPower = np.sqrt(bus_entire_ac_new[idx_ac, 2]**2 + bus_entire_ac_new[idx_ac, 3]**2)
-                idx_gen = np.where(gen_entire_ac_new[:, 0] == idx)[0]
-                genPower = np.sqrt(gen_entire_ac_new[idx_gen, 1]**2 + gen_entire_ac_new[idx_gen, 2]**2)
-                if loadPower >= genPower:
-                    loadSize = 1e-3 + loadPower * factor
-                    nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='red', node_size=loadSize, ax=ax)
-                    genSize = 1e-3 + genPower * factor 
-                    nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='green', node_size=genSize, ax=ax)
-                else:
-                    genSize = 1e-3 + genPower * factor
-                    nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='green', node_size=genSize, ax=ax)
-                    loadSize = 1e-3 + loadPower * factor 
-                    nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='red', node_size=loadSize, ax=ax)
-            else:
-                idx_ac = np.where(bus_entire_ac_new[:, 0] == idx)[0]
-                loadPower = np.sqrt(bus_entire_ac_new[idx_ac, 2]**2 + bus_entire_ac_new[idx_ac, 3]**2)
-                loadSize = 1e-3 + loadPower * factor
-                nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='red', node_size=loadSize, ax=ax)
-        else:
-            nx.draw_networkx_nodes(G, pos, nodelist=[idx], node_color='blue', node_shape='^', node_size=50, ax=ax)
+    factor = 0.8           
 
+    for idx, coord in pos.items():
+
+        nodeInfo = []         
+
+        if idx in acNodes:         
+
+            idx_ac = np.where(bus_entire_ac_new[:, 0] == idx)[0]
+            loadPower = np.sqrt(bus_entire_ac_new[idx_ac, 2]**2 +
+                                bus_entire_ac_new[idx_ac, 3]**2)
+            loadSize = 1e-3 + loadPower * factor
+            nodeInfo.append((loadSize, 'red', 'o'))
+
+            if idx in genNodes:
+                idx_gen = np.where(gen_entire_ac_new[:, 0] == idx)[0]
+                genPower = np.sqrt(gen_entire_ac_new[idx_gen, 1]**2 +
+                                gen_entire_ac_new[idx_gen, 2]**2)
+                genSize = 1e-3 + genPower * factor
+                nodeInfo.append((genSize, 'lightskyblue', 'o'))  
+
+            if idx in resNodes:
+                idx_res = np.where(res_entire_ac_new[:, 0] == idx)[0]
+                resPower = np.sqrt(res_entire_ac_new[idx_res, 1]**2 +
+                                res_entire_ac_new[idx_res, 2]**2)
+                resSize = 1e-3 + resPower * factor
+                nodeInfo.append((resSize, 'green', 'o'))       
+
+        else:                     
+            nodeInfo.append((50.0, 'blue', '^'))               
+
+        for size, color, shape in sorted(nodeInfo, key=lambda t: t[0], reverse=True):
+            nx.draw_networkx_nodes(G, pos,
+                nodelist=[idx],
+                node_color=color,
+                node_size=size,
+                node_shape=shape,
+                ax=ax)
     
+    # -------------------------------
+    # Add Node Text Related to Voltage
+    # -------------------------------
     voltMag_ac = np.sqrt(np.concatenate(vn2_ac_k).reshape(-1, 1))
     voltMag_dc = np.sqrt(vn2_dc_k)
     voltLabels = {}
@@ -207,11 +238,10 @@ def viz_opf(
             voltLabels[idx] = voltStr
 
     nx.draw_networkx_labels(G, pos, labels=orderLabels, font_size=10, font_color='brown', 
-                            horizontalalignment='center', verticalalignment='top', ax=ax)
+        horizontalalignment='center', verticalalignment='top', ax=ax)
     
     nx.draw_networkx_labels(G, pos, labels=voltLabels, font_size=10, font_color='purple', 
-                           horizontalalignment='left', verticalalignment='bottom', ax=ax)
-
+        horizontalalignment='left', verticalalignment='bottom', ax=ax)
 
     # -------------------------------
     # Edit Edge Color
@@ -270,41 +300,54 @@ def viz_opf(
     # -------------------------------
     # Add Legend
     # -------------------------------
-    acLoads     = Line2D([], [],  
-                    marker='o',            
-                    color='none',          
-                    markerfacecolor='red',
-                    markeredgecolor='red',
-                    markersize=10,
-                    label='AC Loads')
+    acLoads = Line2D(
+        [], [],  
+        marker='o',            
+        color='none',          
+        markerfacecolor='red',
+        markeredgecolor='red',
+        markersize=10,
+        label='AC Loads')
     
-    acGens      = Line2D([], [],  
-                    marker='o',            
-                    color='none',          
-                    markerfacecolor='green',
-                    markeredgecolor='green',
-                    markersize=10,
-                    label='AC Generators')
-
-    dcBuses     = Line2D([], [],
-                    marker='^',           
-                    color='none',
-                    markerfacecolor='blue',
-                    markeredgecolor='blue',
-                    markersize=10,
-                    label='VSC Converters')
-
-    branchLines = Line2D([], [],
-                        color='orange',
-                        linewidth=2,
-                        label='Branch Lines')
+    acGens = Line2D(
+        [], [],  
+        marker='o',            
+        color='none',          
+        markerfacecolor='lightskyblue',
+        markeredgecolor='lightskyblue',
+        markersize=10,
+        label='AC Generators')
     
-    legend_handles = [acLoads, acGens, dcBuses, branchLines]
+    acRESs = Line2D(
+        [], [],  
+        marker='o',            
+        color='none',          
+        markerfacecolor='green',
+        markeredgecolor='green',
+        markersize=10,
+        label='AC RESs')
+    
+    dcBuses = Line2D(
+        [], [],
+        marker='^',           
+        color='none',
+        markerfacecolor='blue',
+        markeredgecolor='blue',
+        markersize=10,
+        label='VSC Converters')
+
+    branchLines = Line2D(
+        [], [],
+        color='orange',
+        linewidth=2,
+        label='Branch Lines')
+    
+    legend_handles = [acLoads, acGens, acRESs, dcBuses, branchLines]
 
     plt.legend(handles=legend_handles,
-            loc='lower right',
-            fontsize='small',
-            frameon=False)
+        loc='lower right',
+        fontsize='small',
+        frameon=False)
     
     plt.show()
 

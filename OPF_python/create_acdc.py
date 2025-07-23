@@ -65,6 +65,7 @@ def create_ac(case_name: str) -> Dict[str, Any]:
         <case_name>_bus_ac.csv
         <case_name>_branch_ac.csv
         <case_name>_gen_ac.csv
+        <case_name>_res_ac.csv
 
     Returns a dictionary `dc` with the following keys:
         "baseMVA": Scalar base MVA value.
@@ -72,6 +73,7 @@ def create_ac(case_name: str) -> Dict[str, Any]:
         "branch": Matrix containing AC branch data.
         "generator": Matrix containing AC generator data.
         "gencost": Matrix containing AC generator cost data.
+        "res": Matrix containing AC RES data.
 
     """
     #Set the base path to the directory containing this file
@@ -82,7 +84,8 @@ def create_ac(case_name: str) -> Dict[str, Any]:
         "_bus_ac.csv",
         "_branch_ac.csv",
         "_gen_ac.csv",
-        "_gencost_ac.csv"
+        "_gencost_ac.csv",
+        "_res_ac.csv"
     ]
     required_files: List[Path] = [script_dir / f"{case_name}{suffix}" for suffix in file_suffixes]
 
@@ -97,6 +100,11 @@ def create_ac(case_name: str) -> Dict[str, Any]:
         "bus": pd.read_csv(required_files[1], header=None).to_numpy(),
         "branch": pd.read_csv(required_files[2], header=None).to_numpy(),
         "generator": pd.read_csv(required_files[3], header=None).to_numpy(),
-        "gencost": pd.read_csv(required_files[4], header=None).to_numpy()
+        "gencost": pd.read_csv(required_files[4], header=None).to_numpy(),
+        "res": pd.read_csv(required_files[5], header=None).to_numpy()
     }
     return ac
+
+if __name__ == "__main__":
+    network_dc = create_dc("mtdc3slack_a")
+    network_ac = create_ac("ac14ac57")
