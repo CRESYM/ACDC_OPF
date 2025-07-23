@@ -18,9 +18,9 @@ end
 # ---------------------------------------------------------------- #
 
 """
-    viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, gen_entire_ac,
-            pgen_ac_k, qgen_ac_k, baseMVA_ac, vn2_ac_k, vn2_dc_k, pij_ac_k, qij_ac_k,
-            pij_dc_k, ps_dc_k, baseMW_dc, pol_dc)
+    viz_opf(bus_entire_ac, branch_entire_ac, gen_entire_ac, res_entire_ac,
+        pgen_ac_k, qgen_ac_k, pij_ac_k, qij_ac_k, pres_ac_k, qres_ac_k, vn2_ac_k, baseMVA_ac, 
+        bus_dc, branch_dc, conv_dc, pij_dc_k, ps_dc_k, qs_dc_k, vn2_dc_k, pol_dc, baseMW_dc)
 
 Visualizes AC/DC OPF results 
 
@@ -28,31 +28,34 @@ INPUTS:
   - bus_entire_ac:      Complete bus data from the AC network.
   - branch_entire_ac:   Complete branch data from the AC network.
   - gen_entire_ac:      Complete generator data from the AC network.
-  - baseMVA_ac:         AC system base MVA value.
+  - res_entire_ac:      Complete RES data from the AC network.
   - pgen_ac_k:          Optimized resutls of generator active power.
   - qgen_ac_k:          Optimized results of generator reactive power.
-  - vn2_ac_k:           Optimized results of the squared AC voltage.
   - pij_ac_k:           Optimized results of the AC branch active power.
   - qij_ac_k:           Optimized results of the AC branch reactive power.
+  - pres_ac_k:          Optimized results of the AC RES active power.
+  - qres_ac_k:          Optimized results of the AC RES reactive power.
+  - vn2_ac_k:           Optimized results of the squared AC voltage.
+  - baseMVA_ac:         AC system base MVA value.
 
   - bus_dc:             Bus data from the DC network.
   - branch_dc:          Branch data from the DC network.
   - conv_dc:            Converter data.
-  - baseMW_dc:          DC system base MW value.
-  - pol_dc:             Polarity of the DC network
-  - vn2_dc_k:           Optimized results of the DC network
   - pij_dc_k:           Optimized resutls of the DC branch active power.
   - ps_dc_k:            Optimized results of the VSC PCC active power.
   - qs_dc_k:            Optimized results of the VSC PCC reactive power.
+  - vn2_dc_k:           Optimized results of the squared DC voltage.
+  - pol_dc:             Polarity of the DC network.
+  - baseMW_dc:          DC system base MW value.
 
 OUTPUT:
   - Figure
 """
-function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, gen_entire_ac,
-                 pgen_ac_k, qgen_ac_k, baseMVA_ac, vn2_ac_k, vn2_dc_k, pij_ac_k, qij_ac_k,
-                 pij_dc_k, ps_dc_k, qs_dc_k, baseMW_dc, pol_dc)
+function viz_opf(bus_entire_ac, branch_entire_ac, gen_entire_ac, res_entire_ac,
+            pgen_ac_k, qgen_ac_k, pij_ac_k, qij_ac_k, pres_ac_k, qres_ac_k, vn2_ac_k, baseMVA_ac, 
+            bus_dc, branch_dc, conv_dc, pij_dc_k, ps_dc_k, qs_dc_k, vn2_dc_k, pol_dc, baseMW_dc)
 
-  ########## 1. Reorder AC Data ##########
+########## 1. Reorder AC Data ##########
   numBuses_ac = size(bus_entire_ac, 1)
   oldBusNums_ac = bus_entire_ac[:, 1]
   busAreas_ac   = bus_entire_ac[:, end]
@@ -119,7 +122,23 @@ function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, ge
   gen_entire_ac_new[:, 2] .= vcat(pgen_ac_k...) .* baseMVA_ac
   gen_entire_ac_new[:, 3] .= vcat(qgen_ac_k...) .* baseMVA_ac
 
-  ########## 5. Construct Network Graph ##########
+  ########## 5. Reorder RES Data ##########
+  mappingMatrix = hcat(bus_entire_ac[:, 1], bus_entire_ac_new[:, 1], bus_entire_ac[:, end])
+  res_new_col = similar(res_entire_ac[:, 1])
+
+  for (i, row) in enumerate(eachrow(res_entire_ac))
+        rowVec = row[[1, end]]                   # 对行视图直接切片
+        idx    = find_row_index(rowVec, mappingMatrix[:, [1, 3]])
+        res_new_col[i] = mappingMatrix[idx, 2]
+  end
+
+  res_entire_ac_new = copy(res_entire_ac)
+  res_entire_ac_new[:, 1] .= res_new_col
+
+  res_entire_ac_new[:, 2] .= vcat(pres_ac_k...) .* baseMVA_ac
+  res_entire_ac_new[:, 3] .= vcat(qres_ac_k...) .* baseMVA_ac
+
+  ########## 6. Construct Network Graph ##########
   # Combine branch "from" and "to" nodes for AC, DC and converter branches
   fromNode = vcat(branch_entire_ac_new[:, 1],
                   branch_dc_new[:, 1],
@@ -134,6 +153,7 @@ function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, ge
   acNodes = bus_entire_ac_new[:, 1]
   dcNodes = bus_dc_new[:, 1]
   genNodes = gen_entire_ac_new[:, 1]
+  resNodes = res_entire_ac_new[:, 1]
   
   node2Index = Dict(node => i for (i, node) in enumerate(allNodes))
   Random.seed!(1234)
@@ -229,38 +249,68 @@ function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, ge
   cb = Colorbar(fig[1,2], colormap=ColorSchemes.Oranges, limits=(minEdgePower, maxEdgePower),
                 label = "Branch Power/MVA(MW)", width = 30, height = Relative(0.8))
   
-  # Edit Node Markers regarding Power
+  # Edit Node Markers Regarding Power
   genActivePower = reshape(vcat(pgen_ac_k...), :, 1) * baseMVA_ac
   genReactivePower = reshape(vcat(qgen_ac_k...), :, 1) * baseMVA_ac
+
+  resActivePower = reshape(vcat(pres_ac_k...), :, 1) * baseMVA_ac
+  resReactivePower = reshape(vcat(qres_ac_k...), :, 1) * baseMVA_ac
+
+  xAll, yAll   = Float64[], Float64[]
+  sizeAll      = Float64[]
+  colorAll     = Symbol[]
+  markerAll    = Symbol[]      
+
   for (i, (x, y)) in xy
-      if i in acNodes
-          if i in genNodes
-              idx_ac = findfirst(x -> x == i, bus_entire_ac_new[:, 1])
-              loadPower = sqrt(bus_entire_ac_new[idx_ac, 3]^2 + bus_entire_ac_new[idx_ac, 4]^2)
-              idx_gen = findfirst(x -> x == i, gen_entire_ac_new[:, 1])
-              genPower = sqrt(genActivePower[idx_gen, 1]^2 + genReactivePower[idx_gen, 1]^2)
-              if loadPower >= genPower   # draw load first then generator
-                  powerSize = 1e-3 + loadPower * 0.11
-                  G.scatter!(ax, [x], [y]; color=:red, markersize=powerSize)
-                  powerSize = 1e-3 + genPower * 0.11
-                  G.scatter!(ax, [x], [y]; color=:green, markersize=powerSize) 
-              else                      # draw generator first then load
-                  powerSize = 1e-3 + genPower * 0.11
-                  G.scatter!(ax, [x], [y]; color=:green, markersize=powerSize)
-                  powerSize = 1e-3 + loadPower * 0.11
-                  G.scatter!(ax, [x], [y]; color=:red, markersize=powerSize)
-              end
-          else
-              idx_ac = findfirst(x -> x == i, bus_entire_ac_new[:, 1])
-              loadPower = sqrt(bus_entire_ac_new[idx_ac, 3]^2 + bus_entire_ac_new[idx_ac, 4]^2)
-              powerSize = 1e-3 + loadPower * 0.11
-              G.scatter!(ax, [x], [y]; color=:red, markersize=powerSize)
-          end
-      else 
-          G.scatter!(ax, [x], [y]; color=:blue, marker=:utriangle, markersize=16)
-      end
-  end
+        if i in acNodes                     
   
+            idx_ac  = findfirst(z -> z == i, bus_entire_ac_new[:, 1])
+            loadPower = sqrt(bus_entire_ac_new[idx_ac, 3]^2 +
+                            bus_entire_ac_new[idx_ac, 4]^2)
+
+            push!(xAll, x);  push!(yAll, y)
+            push!(sizeAll, 1e-3 + loadPower * 0.15)
+            push!(colorAll, :red);  push!(markerAll, :circle)
+
+            if i in genNodes
+                idx_gen = findfirst(z -> z == i, gen_entire_ac_new[:, 1])
+                if idx_gen !== nothing
+                    genPower = sqrt(genActivePower[idx_gen, 1]^2 +
+                                    genReactivePower[idx_gen, 1]^2)
+                    push!(xAll, x);  push!(yAll, y)
+                    push!(sizeAll, 1e-3 + genPower * 0.15)
+                    push!(colorAll, :lightskyblue);  push!(markerAll, :circle)
+                end
+            end
+
+            if i in resNodes
+                idx_res = findfirst(z -> z == i, res_entire_ac_new[:, 1])
+                if idx_res !== nothing
+                    resPower = sqrt(resActivePower[idx_res, 1]^2 +
+                                    resReactivePower[idx_res, 1]^2)
+                    push!(xAll, x);  push!(yAll, y)
+                    push!(sizeAll, 1e-3 + resPower * 0.15)
+                    push!(colorAll, :green);   push!(markerAll, :circle)  
+                end
+            end
+        else                                  
+            push!(xAll, x);  push!(yAll, y)
+            push!(sizeAll, 16.0)
+            push!(colorAll, :blue);  push!(markerAll, :utriangle)
+        end
+  end
+
+  # Plot acoording to the size (large->small)
+  order = sortperm(sizeAll; rev=true)   
+
+  for k in order
+        G.scatter!(ax, [xAll[k]], [yAll[k]];
+               color   = colorAll[k],
+               marker  = markerAll[k],
+               markersize = sizeAll[k])
+  end
+
+
   # Add Node Annotations (Node ID and Voltage)
   for (i, (x, y)) in xy
       if i in acNodes
@@ -280,7 +330,9 @@ function viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, ge
   legendACLoad = G.scatter!(ax, [-9999.0], [-9999.0];
       color=:red, marker=:circle, markersize=15, label="AC Loads")
   legendACGen  = G.scatter!(ax, [-9999.0], [-9999.0];
-      color=:green, marker=:circle, markersize=15, label="AC Generators")
+      color=:lightskyblue, marker=:circle, markersize=15, label="AC Generators")
+  legendACRES  = G.scatter!(ax, [-9999.0], [-9999.0];
+      color=:green, marker=:circle, markersize=15, label="AC RESs")
   legendDCNode = G.scatter!(ax, [-9999.0], [-9999.0];
       color=:blue, marker=:utriangle, markersize=16, label="VSC Converters")
   legendBranch = G.lines!(ax, [-9999.0, -9999.0], [-9999.0, -9999.0];

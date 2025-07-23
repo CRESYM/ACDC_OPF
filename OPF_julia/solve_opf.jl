@@ -264,7 +264,7 @@ function solve_opf(dc_name::String, ac_name::String;
                 elseif conv_dc[i, 4] == 2 # dc voltage control
                     @constraint(model, vn2_dc[i] == conv_dc[i, 8]^2)
                 else # droop control
-                    @constraint(model, pn_dc[i] == (conv_dc[i, 24] - 1 / conv_dc[i, 23] * (.5 + .5*vn_dc[i] - conv_dc[i, 25])) / baseMW * (-1))
+                    @constraint(model, pn_dc[i] == (conv_dc[i, 24] - 1 / conv_dc[i, 23] * (.5 + .5*vn2_dc[i] - conv_dc[i, 25])) / baseMW_dc * (-1))
                 end
                 # ac side control
                 if conv_dc[i, 5] == 1 # ac q control
@@ -328,16 +328,21 @@ function solve_opf(dc_name::String, ac_name::String;
         7. qij_ac   - AC branch reactive power flow
         8. ss_ac    - AC SOC relaxed term no.1
         9. cc_ac    - AC SOC relaxed term no.2
+        10.pres_ac  - AC RES active power 
+        11.qres_ac  - AC RES reactive power 
 
     INPUTS:
         - model: JuMP model.
         - ngrids: Number of AC grids.
         - nbuses_ac: Vectors containing the number of buses for each grid.
         - ngens_ac: Vectors containing the number of generators for each grid.
+        - nress_ac: Vectors containing the number of RESs for each grid.
         - bus_ac: Vectors of bus data matrices for each grid.
         - generator_ac: Vectors of generator data for each grid.
+        - res_ac: Vectors of RES data for each grid.
         - BB_ac: Vectors of Imaginary part of the AC admittance matrix.
         - GG_ac: Vectors of Real part of the AC admittance matrix.
+        - sres_ac: Vectors of the rated capacity of RESs. 
         - baseMVA_ac: AC base MVA
 
     Outputs (NamedTuple):
@@ -350,10 +355,13 @@ function solve_opf(dc_name::String, ac_name::String;
                     ngrids::Int64,
                     nbuses_ac::Vector{Int64},
                     ngens_ac::Vector{Int64},
+                    nress_ac::Vector{Int64},
                     bus_ac::Vector{Matrix{Float64}},
                     generator_ac::Vector{Matrix{Float64}},
+                    res_ac::Vector{Matrix{Float64}},
                     BB_ac::Vector{Matrix{Float64}},
                     GG_ac::Vector{Matrix{Float64}},
+                    sres_ac::Vector{Vector{Float64}},
                     baseMVA_ac::Number)
 
         # Pre-allocate 
@@ -369,17 +377,20 @@ function solve_opf(dc_name::String, ac_name::String;
         qij_ac       = Vector{Matrix{JuMP.VariableRef}}(undef, ngrids)
         ss_ac        = Vector{Matrix{JuMP.VariableRef}}(undef, ngrids)
         cc_ac        = Vector{Matrix{JuMP.VariableRef}}(undef, ngrids)
+        pres_ac      = Vector{Vector{JuMP.VariableRef}}(undef, ngrids)
+        qres_ac      = Vector{Vector{JuMP.VariableRef}}(undef, ngrids)
 
         # Loop over each AC grid to define variables and constraints
         for ng in 1:ngrids
             
             # --- Initialization (a totoal of 9 kinds of variables) ---
-            lb_ac[ng] = Vector{Vector{Float64}}(undef, 9)
-            ub_ac[ng] = Vector{Vector{Float64}}(undef, 9)
+            lb_ac[ng] = Vector{Vector{Float64}}(undef, 11)
+            ub_ac[ng] = Vector{Vector{Float64}}(undef, 11)
             lb_default = -1e4
             ub_default = 1e4
             nbuses = nbuses_ac[ng]
             ngens = ngens_ac[ng]
+            nress = nress_ac[ng]
 
             # --- 1 AC nodal voltage squared -vn2_ac: nbuses x 1 ---
             vn2_ac[ng] = @variable(model, [1:nbuses])
@@ -444,6 +455,20 @@ function solve_opf(dc_name::String, ac_name::String;
             @constraint(model, cc_ac[ng][:] .>= lb_ac[ng][9])
             @constraint(model, cc_ac[ng][:] .<= ub_ac[ng][9])
 
+            # --- 10 AC RES active power output -pres_ac: nress x 1 ---
+            pres_ac[ng] = @variable(model, [1:nress])
+            lb_ac[ng][10] = fill(0, nress)
+            ub_ac[ng][10] = res_ac[ng][:, 2] ./ baseMVA_ac
+            @constraint(model, pres_ac[ng] .>= lb_ac[ng][10])
+            @constraint(model, pres_ac[ng] .<= ub_ac[ng][10])
+
+            # --- 11 AC RES reactive power output -qres_ac: nress x 1 ---
+            qres_ac[ng] = @variable(model, [1:nress])
+            lb_ac[ng][11] = fill(lb_default, nress)
+            ub_ac[ng][11] = fill(ub_default, nress)
+            @constraint(model, qres_ac[ng] .>= lb_ac[ng][11])
+            @constraint(model, qres_ac[ng] .<= ub_ac[ng][11])
+
             # ------------------------------
             # AC Nodal Power Balance Constraints 
             # ------------------------------
@@ -477,6 +502,28 @@ function solve_opf(dc_name::String, ac_name::String;
             @constraint(model, diag_cc_ac .>= 0)
             @constraint(model, diag_cc_ac .== vn2_ac[ng])
 
+            # ------------------------------
+            # AC RES Capacity Constraints (Polygon approximation)
+            # ------------------------------
+            theta = collect(1:8) .* (π/8)         
+            C = cos.(theta)                     
+            S = sin.(theta)              
+
+            Pres = pres_ac[ng]          
+            Qres = qres_ac[ng]
+            Sres = sres_ac[ng]         
+
+            nress = length(Pres)
+
+            Cmat = C .* ones(1, nress)          
+            Smat = S .* ones(1, nress)         
+
+            L = Cmat .* Pres' .+ Smat .* Qres'   
+            R = repeat(Sres', 8, 1)
+
+            @constraint(model, vec(L) .<= vec(R))     
+            @constraint(model, vec(-L) .<= vec(R))   
+
         end
 
         # Bundle AC variables into a NamedTuple for convenience
@@ -490,6 +537,8 @@ function solve_opf(dc_name::String, ac_name::String;
             qij_ac = qij_ac,
             ss_ac = ss_ac,
             cc_ac = cc_ac,
+            pres_ac = pres_ac,
+            qres_ac = qres_ac
         )
         return (var_ac = var_ac, lb_ac = lb_ac, ub_ac = ub_ac)
     end
@@ -525,14 +574,18 @@ function solve_opf(dc_name::String, ac_name::String;
         ngrids::Int,
         nbuses_ac::Vector{Int},
         ngens_ac::Vector{Int},
+        nress_ac::Vector{Int},
         pn_ac::Vector{Vector{JuMP.VariableRef}},
         qn_ac::Vector{Vector{JuMP.VariableRef}},
         pgen_ac::Vector{Vector{JuMP.VariableRef}},
         qgen_ac::Vector{Vector{JuMP.VariableRef}},
         pd_ac::Vector{Vector{Float64}},
         qd_ac::Vector{Vector{Float64}},
+        pres_ac::Vector{Vector{JuMP.VariableRef}},
+        qres_ac::Vector{Vector{JuMP.VariableRef}},
         vn2_ac::Vector{Vector{JuMP.VariableRef}},
         generator_ac::Vector{Matrix{Float64}},
+        res_ac::Vector{Matrix{Float64}},
         nconvs_dc::Int,
         ps_dc::Vector{JuMP.VariableRef},
         qs_dc::Vector{JuMP.VariableRef},
@@ -544,13 +597,19 @@ function solve_opf(dc_name::String, ac_name::String;
             pm_ac = [AffExpr(0.0) for _ in 1:nbuses_ac[ng]]
             qm_ac = [AffExpr(0.0) for _ in 1:nbuses_ac[ng]]
             #  Every AC node have load 
-            pm_ac .= pm_ac .- pd_ac[ng]
-            qm_ac .= qm_ac .- qd_ac[ng]
+            pm_ac .-= pd_ac[ng]
+            qm_ac .-= qd_ac[ng]
             #  If the AC node connected with generator
             for i in 1:ngens_ac[ng]
                 bus_index = Int(generator_ac[ng][i, 1])
                 pm_ac[bus_index] += pgen_ac[ng][i]
                 qm_ac[bus_index] += qgen_ac[ng][i]
+            end
+            #  If the AC node connected with RES
+            for i in 1:nress_ac[ng]
+                bus_index = Int(res_ac[ng][i, 1])
+                pm_ac[bus_index] += pres_ac[ng][i]
+                qm_ac[bus_index] += qres_ac[ng][i]
             end
             # If the AC node connected with VSC
             for i in 1:nconvs_dc
@@ -597,27 +656,41 @@ function solve_opf(dc_name::String, ac_name::String;
         generator_ac::Vector{Matrix{Float64}},
         gencost_ac::Vector{Matrix{Float64}},
         pgen_ac::Vector{Vector{JuMP.VariableRef}},
+        res_ac::Vector{Matrix{Float64}},
+        pres_ac::Vector{Vector{JuMP.VariableRef}},
         baseMVA_ac::Number)
 
         # Pre-allocate 
         actgen_ac = Vector{Vector{Float64}}(undef, ngrids)
+        actres_ac = Vector{Vector{Float64}}(undef, ngrids)
         obj       = Vector{Any}(undef, ngrids)
 
-        # Define generation costs
+        # Define generation and RES costs
         for ng in 1:ngrids
             actgen_ac[ng] = generator_ac[ng][:, 8]
+            actres_ac[ng] = res_ac[ng][:, 11]
+
             if gencost_ac[ng][1, 4] == 3  # Quadratic cost type
                 obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac^2 .* gencost_ac[ng][:, 5] .* pgen_ac[ng].^2 + 
                             baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
                             gencost_ac[ng][:, 7]) )
-            elseif gencost_ac[ng][1, 4] == 2  # Linear cost type
-                obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac .* gencost_ac[ng][:, 5] .* pgen_ac[ng] + 
-                            gencost_ac[ng][:, 6]) )
-            else
-                error("Unsupported generator cost type in grid $ng")
+            end
+            if res_ac[ng][1, 7] == 3 
+                obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac^2 .* res_ac[ng][:, 8] .* pres_ac[ng].^2 + 
+                            baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
+                            res_ac[ng][:, 10]) )
+            end
+
+            if gencost_ac[ng][1, 4] == 2  # Linear cost type
+                obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
+                            gencost_ac[ng][:, 7]) )
+            end
+            if res_ac[ng][1, 7] == 2 
+                obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
+                            res_ac[ng][:, 10]) )
             end
         end
-
+            
         Obj = sum(obj)
 
         return Obj
@@ -669,17 +742,21 @@ function solve_opf(dc_name::String, ac_name::String;
         branch_entire_ac  = res_params_ac.branch_entire_ac
         gen_entire_ac     = res_params_ac.gen_entire_ac
         gencost_entire_ac = res_params_ac.gencost_entire_ac
+        res_entire_ac     = res_params_ac.res_entire_ac
         ngrids            = res_params_ac.ngrids
         bus_ac            = res_params_ac.bus_ac
         branch_ac         = res_params_ac.branch_ac
         generator_ac      = res_params_ac.generator_ac
         gencost_ac        = res_params_ac.gencost_ac
+        res_ac            = res_params_ac.res_ac
         recRef_ac         = res_params_ac.recRef_ac
         pd_ac             = res_params_ac.pd_ac
         qd_ac             = res_params_ac.qd_ac
+        sres_ac           = res_params_ac.sres_ac
         nbuses_ac         = res_params_ac.nbuses_ac
         nbranches_ac      = res_params_ac.nbranches_ac
         ngens_ac          = res_params_ac.ngens_ac
+        nress_ac          = res_params_ac.nress_ac
         GG_ac             = res_params_ac.GG_ac
         BB_ac             = res_params_ac.BB_ac
         GG_ft_ac          = res_params_ac.GG_ft_ac
@@ -720,7 +797,7 @@ function solve_opf(dc_name::String, ac_name::String;
         convPloss_dc = res_setup_dc.var_dc.convPloss_dc
 
         #  Set up AC variables and constraints
-        res_setup_ac = setup_ac(model, ngrids, nbuses_ac, ngens_ac, bus_ac, generator_ac, BB_ac, GG_ac, baseMVA_ac)
+        res_setup_ac = setup_ac(model, ngrids, nbuses_ac, ngens_ac, nress_ac, bus_ac, generator_ac, res_ac, BB_ac, GG_ac, sres_ac, baseMVA_ac)
         # Unpack AC variables for further use
         vn2_ac   = res_setup_ac.var_ac.vn2_ac
         pn_ac    = res_setup_ac.var_ac.pn_ac
@@ -731,14 +808,19 @@ function solve_opf(dc_name::String, ac_name::String;
         qij_ac   = res_setup_ac.var_ac.qij_ac
         ss_ac    = res_setup_ac.var_ac.ss_ac
         cc_ac    = res_setup_ac.var_ac.cc_ac
+        pres_ac  = res_setup_ac.var_ac.pres_ac
+        qres_ac  = res_setup_ac.var_ac.qres_ac
 
         # Set up AC/DC coupling constraints
-        setup_cp(model, ngrids, nbuses_ac, ngens_ac, pn_ac, qn_ac, pgen_ac, qgen_ac, 
-                pd_ac, qd_ac, vn2_ac, generator_ac, nconvs_dc, ps_dc, qs_dc, v2s_dc, conv_dc)
+        # setup_cp(model, ngrids, nbuses_ac, ngens_ac, pn_ac, qn_ac, pgen_ac, qgen_ac, 
+        #         pd_ac, qd_ac, vn2_ac, generator_ac, nconvs_dc, ps_dc, qs_dc, v2s_dc, conv_dc)
+
+        setup_cp(model, ngrids, nbuses_ac, ngens_ac, nress_ac, pn_ac, qn_ac, pgen_ac, qgen_ac, 
+                pd_ac, qd_ac, pres_ac, qres_ac, vn2_ac, generator_ac, res_ac, nconvs_dc, ps_dc, qs_dc, v2s_dc, conv_dc)
 
     
         # Set up Objectives
-        Obj = setup_obj(model, ngrids, generator_ac, gencost_ac, pgen_ac, baseMVA_ac)
+        Obj = setup_obj(model, ngrids, generator_ac, gencost_ac, pgen_ac, res_ac, pres_ac, baseMVA_ac)
 
         # Define overall objective as the sum of grid costs.
         @objective(model, Min, Obj)
@@ -773,12 +855,14 @@ function solve_opf(dc_name::String, ac_name::String;
     qij_ac_k   = Vector{Any}(undef, ngrids)
     ss_ac_k    = Vector{Any}(undef, ngrids)
     cc_ac_k    = Vector{Any}(undef, ngrids)
+    pres_ac_k  = Vector{Any}(undef, ngrids)
+    qres_ac_k  = Vector{Any}(undef, ngrids)
 
     for ng in 1:ngrids
         (vn2_ac_k[ng], pn_ac_k[ng], qn_ac_k[ng], pgen_ac_k[ng], qgen_ac_k[ng], 
-        pij_ac_k[ng], qij_ac_k[ng], ss_ac_k[ng], cc_ac_k[ng]) =
+        pij_ac_k[ng], qij_ac_k[ng], ss_ac_k[ng], cc_ac_k[ng], pres_ac_k[ng], qres_ac_k[ng] ) =
         (JuMP.value.(x) for x in (vn2_ac[ng], pn_ac[ng], qn_ac[ng], pgen_ac[ng], qgen_ac[ng], 
-        pij_ac[ng], qij_ac[ng], ss_ac[ng], cc_ac[ng] ))
+        pij_ac[ng], qij_ac[ng], ss_ac[ng], cc_ac[ng], pres_ac[ng], qres_ac[ng] ))
     end
 
 
@@ -789,23 +873,21 @@ function solve_opf(dc_name::String, ac_name::String;
     # ----------------------------
     # Print AC Grid Bus Data
     # ---------------------------- 
-    println(io, "================================================================================")
-    println(io, "|   AC Grid Bus Data                                                           |")
-    println(io, "================================================================================")
-    println(io, " Area    Bus      Voltage             Generation                Load        ")
-    println(io, " #       #     Mag [pu] Ang [deg]   Pg [MW]   Qg [MVAr]   Pd [MW]  Qd [MVAr]")
-    println(io, "-----   -----  --------  --------   --------  ---------   -------- ---------")
+    println(io, "===========================================================================================")
+    println(io, "|   AC Grid Bus Data                                                                      |")
+    println(io, "===========================================================================================")
+    println(io, " Area    Bus   Voltage        Generation             Load                  RES")
+    println(io, " #       #     Mag [pu]  Pg [MW]   Qg [MVAr]   Pd [MW]  Qd [MVAr]  Pres [MW]  Qres [MVAr]")
+    println(io, "-----   -----  --------  --------   --------  ---------  --------  ---------  -----------")
     for ng in 1:ngrids
         genidx = generator_ac[ng][:, 1]
-        
+        residx = res_ac[ng][:, 1]
         for i in 1:nbuses_ac[ng][]
                 
             formatted_vm_ac = @sprintf("%.3f", sqrt(value(vn2_ac[ng][i])))
-            formatted_va_ac = @sprintf("%.3f", value(0 / π * 180))
         
-            print(io, lpad(ng, 3), " ", lpad(i, 7, " "), " ", 
-                    lpad(formatted_vm_ac, 10, " "),  
-                    lpad(formatted_va_ac, 10, " "))
+            print(io, lpad(ng, 3), " ",  lpad(i, 7), " ",
+                    lpad(formatted_vm_ac, 10, " ")) 
                 
             if i == recRef_ac[ng][]
                 print(io, "*")
@@ -817,10 +899,10 @@ function solve_opf(dc_name::String, ac_name::String;
                 formatted_qgen_ac = @sprintf("%.3f", value(qgen_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
                     
                 if i == recRef_ac[ng][]
-                    print(io, lpad(formatted_pgen_ac, 10, " "),
+                    print(io, lpad(formatted_pgen_ac, 9, " "),
                         lpad(formatted_qgen_ac, 11, " "))
                 else
-                    print(io, lpad(formatted_pgen_ac, 11, " "),
+                    print(io, lpad(formatted_pgen_ac, 10, " "),
                         lpad(formatted_qgen_ac, 11, " "))
                 end
                 
@@ -832,16 +914,26 @@ function solve_opf(dc_name::String, ac_name::String;
             else
                 formatted_pd = @sprintf("%.3f", value(pd_ac[ng][i]) * baseMVA_ac)
                 formatted_qd = @sprintf("%.3f", value(qd_ac[ng][i]) * baseMVA_ac)
-                print(io, " " * "        -           -")
+                print(io, " " * "       -           -")
                 print(io, lpad(formatted_pd, 11, " "), lpad(formatted_qd, 10, " "))
             end
+
+            if i in residx
+                m = res_ac[ng][:, 1]
+                formatted_pres_ac = @sprintf("%.3f", value(pres_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
+                formatted_qres_ac = @sprintf("%.3f", value(qres_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
+                print(io, lpad(formatted_pres_ac, 11, " "), lpad(formatted_qres_ac, 13, " "))
+            else
+                 print(io, "          -            -")
+            end
             print(io, "\n") 
+
         end
         
     end
         
     totalGenerationCost = objective_value(model)
-    println(io, "-----   -----  --------  --------   --------  ---------   -------- ---------")
+    println(io, "-----   -----  --------  --------   --------  ---------  --------  ---------  -----------")
     println(io, @sprintf("The total generation costs is ＄%.2f/MWh (€%.2f/MWh)", totalGenerationCost, totalGenerationCost / 1.08))
     print(io, "\n") 
 
@@ -849,7 +941,7 @@ function solve_opf(dc_name::String, ac_name::String;
     # Print AC Grid Branch Data
     # ----------------------------
     println(io, "===========================================================================================")
-    println(io, "|     AC Grids Branch Data                                                                |")
+    println(io, "|     AC Grid Branch Data                                                                 |")
     println(io, "===========================================================================================")
     println(io, " Area   Branch  From   To        From Branch Flow         To Branch Flow      Branch Loss")
     println(io, " #      #       Bus#   Bus#    Pij [MW]   Qij [MVAr]    Pij [MW]   Qij [MVAr]  Pij_loss [MW]")
@@ -965,9 +1057,9 @@ function solve_opf(dc_name::String, ac_name::String;
     # Visualize OPF Results
     # ---------------------------- 
     if plotResult
-        viz_opf(bus_entire_ac, branch_entire_ac, bus_dc, branch_dc, conv_dc, gen_entire_ac,
-                pgen_ac_k, qgen_ac_k, baseMVA_ac, vn2_ac_k, vn2_dc_k, pij_ac_k, qij_ac_k,
-                pij_dc_k, ps_dc_k, qs_dc_k, baseMW_dc, pol_dc)
+        viz_opf(bus_entire_ac, branch_entire_ac, gen_entire_ac, res_entire_ac,
+            pgen_ac_k, qgen_ac_k, pij_ac_k, qij_ac_k, pres_ac_k, qres_ac_k, vn2_ac_k, baseMVA_ac, 
+            bus_dc, branch_dc, conv_dc, pij_dc_k, ps_dc_k, qs_dc_k, vn2_dc_k, pol_dc, baseMW_dc)
     end
     
 end
