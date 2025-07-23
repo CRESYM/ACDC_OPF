@@ -18,6 +18,7 @@
  *   - <case_name>_branch_ac.csv
  *   - <case_name>_gen_ac.csv
  *   - <case_name>_gencost_ac.csv
+ *   - <case_name>_res_ac.csv
 
  * Return unordered_map with the following keys:
  *   "baseMVA"   : Scalar base MVA value.
@@ -25,6 +26,7 @@
  *   "branch"    : Matrix containing AC branch data.
  *   "generator" : Matrix containing AC generator data.
  *   "gencost"   : Matrix containing AC generator cost data.
+ *   "res"       : Matrix containing RES data.
  */
 
 std::unordered_map<std::string, Eigen::MatrixXd> create_ac(const std::string& case_name) {
@@ -36,6 +38,7 @@ std::unordered_map<std::string, Eigen::MatrixXd> create_ac(const std::string& ca
     const std::string branch_file = case_name + "_branch_ac.csv";
     const std::string gen_file = case_name + "_gen_ac.csv";
     const std::string gencost_file = case_name + "_gencost_ac.csv";
+    const std::string res_file = case_name + "_res_ac.csv";
 
     // Check missing files, if not, then save as the matrix
     try {
@@ -69,6 +72,12 @@ std::unordered_map<std::string, Eigen::MatrixXd> create_ac(const std::string& ca
             throw std::runtime_error("Missing required file: " + gencost_file);
         }
         ac["gencost"] = readCSVtoCpp(gencost_file);
+
+        std::ifstream ifs_res(res_file);
+        if (!ifs_res.good()) {
+            throw std::runtime_error("Missing required file: " + res_file);
+        }
+        ac["res"] = readCSVtoCpp(res_file);
     }
     catch (const std::exception& e) {
         std::cerr << "Error in create_ac: " << e.what() << std::endl;

@@ -24,6 +24,7 @@
     <ProjectGuid>{1ddf9b62-92b6-42d2-a0d7-f4a892a742b7}</ProjectGuid>
     <RootNamespace>acmtdcpfcvx</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>acdcopf_cvx</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -72,6 +73,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ExternalIncludePath>D:\gurobi952\win64\include;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>D:\Program Files\gnuplot\bin;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -107,6 +109,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,21 +136,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="solve_opf.cpp" />
+    <ClCompile Include="benchmarkTools.cpp" />
+    <ClCompile Include="csv_reader.cpp" />
     <ClCompile Include="create_ac.cpp" />
     <ClCompile Include="create_dc.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="makeYbus.cpp" />
     <ClCompile Include="params_ac.cpp" />
     <ClCompile Include="params_dc.cpp" />
+    <ClCompile Include="solve_opf.cpp" />
+    <ClCompile Include="viz_opf.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="solve_opf.h" />
+    <ClInclude Include="benchmarkTools.h" />
     <ClInclude Include="create_ac.h" />
     <ClInclude Include="create_dc.h" />
+    <ClInclude Include="csv_reader.h" />
     <ClInclude Include="makeYbus.h" />
     <ClInclude Include="params_ac.h" />
     <ClInclude Include="params_dc.h" />
+    <ClInclude Include="solve_opf.h" />
+    <ClInclude Include="viz_opf.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

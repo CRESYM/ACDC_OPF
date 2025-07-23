@@ -51,7 +51,7 @@ namespace {
         };
     }
 
-} // namespace
+} 
 
 void viz_opf(const OPFVisualData& d) {
         
@@ -162,6 +162,39 @@ void viz_opf(const OPFVisualData& d) {
             }
         }
 
+        // 5. reorder RES data
+        std::map<std::pair<int, int>, int> mappingRES;
+        for (int i = 0; i < numBuses_ac; ++i) {
+            int oldBusIdx_ac = static_cast<int>(d.bus_entire_ac(i, 0));
+            int newBusIdx_ac = static_cast<int>(bus_entire_ac_new(i, 0));
+            int area_ac = static_cast<int>(d.bus_entire_ac(i, numColsBuses_ac - 1));
+            mappingRES[{oldBusIdx_ac, area_ac}] = newBusIdx_ac;
+        }
+
+        Eigen::MatrixXd res_ac_entire_new = d.res_entire_ac;
+        int numRESs = d.res_entire_ac.rows();
+        int numRESCols = d.res_entire_ac.cols();
+
+        for (int i = 0; i < numRESs; ++i) {
+            int oldBusIdx_res = static_cast<int>(d.res_entire_ac(i, 0));
+            int area_ac = static_cast<int>(d.res_entire_ac(i, numRESCols - 1));
+            auto it = mappingRES.find({ oldBusIdx_res, area_ac });
+            if (it != mappingRES.end()) {
+                res_ac_entire_new(i, 0) = it->second;
+            }
+        }
+
+        int idxRES = 0;
+        for (int ng = 0; ng < d.ngrids; ++ng) {
+            for (int j = 0; j < d.nress_ac[ng]; ++j) {
+                res_ac_entire_new(idxRES, 1) = d.pres_ac_k[ng](j) * d.baseMVA_ac;
+                res_ac_entire_new(idxRES, 2) = d.qres_ac_k[ng](j) * d.baseMVA_ac;
+                ++idxRES;
+            }
+        }
+
+
+
         
       /**************************************************
       * REORDER DATA MATRIXES
@@ -171,11 +204,13 @@ void viz_opf(const OPFVisualData& d) {
         Eigen::VectorXi acNodes(numBuses_ac),
                         dcNodes(numBuses_dc),
                         genNodes(numGens),
+                        //resNodes(numRESs),
                         nodeNums(numNodes);
 
         acNodes = bus_entire_ac_new.col(0).cast<int>();   
         dcNodes = bus_dc_new.col(0).cast<int>();         
-        genNodes = gen_ac_entire_new.col(0).cast<int>();  
+        genNodes = gen_ac_entire_new.col(0).cast<int>(); 
+        //resNodes = res_ac_entire_new.col(0).cast<int>();
 
         nodeNums.head(numBuses_ac) = acNodes;
         nodeNums.tail(numBuses_dc) = dcNodes;
@@ -185,7 +220,7 @@ void viz_opf(const OPFVisualData& d) {
       * CONSTRUCT NETWORK GRAPH
       **************************************************/
        
-        // 1. add toNode
+        // 1. build toNode
         const int nFrom = numBranches_ac + numBranches_dc + numConvs;
         Eigen::VectorXi fromNode(nFrom);
         
@@ -193,7 +228,7 @@ void viz_opf(const OPFVisualData& d) {
         fromNode.segment(numBranches_ac, numBranches_dc) = branch_dc_new.col(0).cast<int>();
         fromNode.tail(numConvs) = conv_dc_new.col(0).cast<int>();
 
-        // 2. add toNode
+        // 2. build toNode
         auto nTo = nFrom;
         Eigen::VectorXi toNode(nTo);
 
@@ -274,8 +309,16 @@ void viz_opf(const OPFVisualData& d) {
             + gen_ac_entire_new.col(2).array().square()).sqrt();
         Eigen::VectorXd genPower = Eigen::VectorXd::Zero(xs.size());
         for (int i = 0; i < gen_ac_entire_new.rows(); ++i) {
-            size_t idx = static_cast<size_t>(gen_ac_entire_new(i, 0) - 1);
-            genPower(idx) = genMag(i);          
+            size_t idg = static_cast<size_t>(gen_ac_entire_new(i, 0) - 1);
+            genPower(idg) = genMag(i);
+        }
+
+        Eigen::ArrayXd resMag = (res_ac_entire_new.col(1).array().square()
+            + res_ac_entire_new.col(2).array().square()).sqrt();
+        Eigen::VectorXd resPower = Eigen::VectorXd::Zero(xs.size());
+        for (int i = 0; i < res_ac_entire_new.rows(); ++i) {
+            size_t idr = static_cast<size_t>(res_ac_entire_new(i, 0) - 1);
+            resPower(idr) = resMag(i);
         }
 
 
@@ -470,65 +513,132 @@ void viz_opf(const OPFVisualData& d) {
       * SET NODE LOOK
       **************************************************/
 
-        bool first_gen = true;
+        //bool first_gen = true;
+        //bool first_load = true;
+        //double factor = 0.22;
+
+        //std::vector<double> xp(1), yp(1);
+
+        //for (size_t idx : idx_ac) {
+        //    double loadSize = 1e-3 + loadPower[idx] * factor;
+        //    double genSize = 1e-3 + genPower[idx] * factor;
+        //    bool   hasGen = genPower[idx] > 0.0;
+
+        //    xp[0] = xs[idx];
+        //    yp[0] = ys[idx];
+
+        //    if (hasGen) {
+        //        if (loadSize >= genSize) {
+        //            auto h1 = scatter(xp, yp, loadSize);
+        //            h1->marker_face(true);
+        //            h1->marker_color({ 0.9f, 0.01f, 0.01f });
+        //            h1->marker_face_color({ 0.9f, 0.01f, 0.01f });
+        //            if (first_load) { h1->display_name("AC Loads"); first_load = false; }
+
+        //            auto h2 = scatter(xp, yp, genSize);
+        //            h2->marker_face(true);
+        //            h2->marker_color({ 0.01f, 0.5f, 0.5f });
+        //            h2->marker_face_color({ 0.01f, 0.5f, 0.5f });
+        //            if (first_gen) { h2->display_name("AC Generators"); first_gen = false; }
+        //        }
+        //        else {
+        //            auto h3 = scatter(xp, yp, genSize);
+        //            h3->marker_face(true);
+        //            h3->marker_color({ 0.01f, 0.5f, 0.5f });
+        //            h3->marker_face_color({ 0.01f, 0.5f, 0.5f });
+        //            if (first_gen) { h3->display_name("AC Generators"); first_gen = false; }
+
+        //            auto h4 = scatter(xp, yp, loadSize);
+        //            h4->marker_face(true);
+        //            h4->marker_color({ 0.9f, 0.01f, 0.01f });
+        //            h4->marker_face_color({ 0.9f, 0.01f, 0.01f });
+        //            if (first_load) { h4->display_name("AC Loads"); first_load = false; }
+        //        }
+        //    }
+        //    else {
+        //        auto h5 = scatter(xp, yp, loadSize);
+        //        h5->marker_face(true);
+        //        h5->marker_color({ 0.9f, 0.01f, 0.01f });
+        //        h5->marker_face_color({ 0.9f, 0.01f, 0.01f });
+        //        if (first_load) { h5->display_name("AC Loads"); first_load = false; }
+        //    }
+        //}
+
+   
+        //bool first_dc = true;
+        //auto h6 = scatter(x_dc, y_dc, 25);
+        //h6->marker_face(true);
+        //h6->marker_color({ 0.1f, 0.1f, 0.8f });
+        //h6->marker_face_color({ 0.1f, 0.1f, 0.8f });
+        //h6->marker_style(line_spec::marker_style::upward_pointing_triangle);
+        //if (first_dc) { h6->display_name("DC Node"); first_dc = false; }
+
+        /**************************************************
+        * SET NODE LOOK  (Load / Gen / RES)
+        **************************************************/
+
         bool first_load = true;
-        double factor = 0.22;
+        bool first_gen = true;
+        bool first_res = true;
+        double factor = 0.3;
 
         std::vector<double> xp(1), yp(1);
 
+        const std::array<float, 3> clrLoad{ 0.90f, 0.01f, 0.01f };  
+        const std::array<float, 3> clrGen{ 0.53f, 0.81f, 0.98f };  
+        const std::array<float, 3> clrRES{ 0.00f, 0.60f, 0.00f };   
+
         for (size_t idx : idx_ac) {
             double loadSize = 1e-3 + loadPower[idx] * factor;
-            double genSize = 1e-3 + genPower[idx] * factor;
-            bool   hasGen = genPower[idx] > 0.0;
+            double genSize = 1e-3 + genPower[idx] * factor;       
+            double resSize = 1e-3 + resPower[idx] * factor;       
+
+            struct Dot {
+                double size;
+                std::array<float, 3> color;
+                bool* firstFlag;
+                const char* legend;
+            };
+            std::vector<Dot> dots;
+ 
+            dots.push_back({ loadSize, clrLoad, &first_load, "AC Loads" });
+ 
+            if (genPower[idx] > 0.0)
+                dots.push_back({ genSize,  clrGen,  &first_gen,  "AC Generators" });
+ 
+            if (resPower[idx] > 0.0)
+                dots.push_back({ resSize,  clrRES,  &first_res,  "AC RES" });
+
+            std::sort(dots.begin(), dots.end(),
+                [](const Dot& a, const Dot& b) { return a.size > b.size; });
 
             xp[0] = xs[idx];
             yp[0] = ys[idx];
 
-            if (hasGen) {
-                if (loadSize >= genSize) {
-                    auto h1 = scatter(xp, yp, loadSize);
-                    h1->marker_face(true);
-                    h1->marker_color({ 0.9f, 0.01f, 0.01f });
-                    h1->marker_face_color({ 0.9f, 0.01f, 0.01f });
-                    if (first_load) { h1->display_name("AC Loads"); first_load = false; }
+            for (const auto& dot : dots) {
+                auto h_ac = scatter(xp, yp, dot.size);
+                h_ac->marker_face(true);
+                h_ac->marker_color(dot.color);
+                h_ac->marker_face_color(dot.color);
 
-                    auto h2 = scatter(xp, yp, genSize);
-                    h2->marker_face(true);
-                    h2->marker_color({ 0.01f, 0.5f, 0.5f });
-                    h2->marker_face_color({ 0.01f, 0.5f, 0.5f });
-                    if (first_gen) { h2->display_name("AC Generators"); first_gen = false; }
+                if (*(dot.firstFlag)) {
+                    h_ac->display_name(dot.legend);
+                    *(dot.firstFlag) = false;
                 }
                 else {
-                    auto h3 = scatter(xp, yp, genSize);
-                    h3->marker_face(true);
-                    h3->marker_color({ 0.01f, 0.5f, 0.5f });
-                    h3->marker_face_color({ 0.01f, 0.5f, 0.5f });
-                    if (first_gen) { h3->display_name("AC Generators"); first_gen = false; }
-
-                    auto h4 = scatter(xp, yp, loadSize);
-                    h4->marker_face(true);
-                    h4->marker_color({ 0.9f, 0.01f, 0.01f });
-                    h4->marker_face_color({ 0.9f, 0.01f, 0.01f });
-                    if (first_load) { h4->display_name("AC Loads"); first_load = false; }
+                    h_ac->display_name("");
                 }
-            }
-            else {
-                auto h5 = scatter(xp, yp, loadSize);
-                h5->marker_face(true);
-                h5->marker_color({ 0.9f, 0.01f, 0.01f });
-                h5->marker_face_color({ 0.9f, 0.01f, 0.01f });
-                if (first_load) { h5->display_name("AC Loads"); first_load = false; }
             }
         }
 
-   
+        
         bool first_dc = true;
-        auto h6 = scatter(x_dc, y_dc, 25);
-        h6->marker_face(true);
-        h6->marker_color({ 0.1f, 0.1f, 0.8f });
-        h6->marker_face_color({ 0.1f, 0.1f, 0.8f });
-        h6->marker_style(line_spec::marker_style::upward_pointing_triangle);
-        if (first_dc) { h6->display_name("DC Node"); first_dc = false; }
+        auto h_dc = scatter(x_dc, y_dc, 25);
+        h_dc->marker_face(true);
+        h_dc->marker_color({ 0.1f, 0.1f, 0.8f });
+        h_dc->marker_face_color({ 0.1f, 0.1f, 0.8f });
+        h_dc->marker_style(line_spec::marker_style::upward_pointing_triangle);
+        if (first_dc) { h_dc->display_name("DC Node"); first_dc = false; }
 
 
       /**************************************************
@@ -591,7 +701,7 @@ void viz_opf(const OPFVisualData& d) {
         ax_bar->ylim({ 0, nseg - 1 });
         ax_bar->xlim({ 0, 1 });            
 
-        ax_bar->title("Branch Power/MVAï¼ˆMWï¼‰");
+        ax_bar->title("Branch Power/MVA£¨MW£©");
         ax_bar->title_font_size_multiplier(1.1);   
         ax_bar->title_visible(true);             
         ax_bar->xlabel("");                    
@@ -610,8 +720,8 @@ void viz_opf(const OPFVisualData& d) {
         ax_legend->ylim({ 0, 3 });
         ax_legend->hold(on);
 
-        double y0 = 2.6;
-        double dy = 0.8;
+        double y0 = 2.5;
+        double dy = 0.5;
 
         ax_legend->plot({ 0.05, 0.35 }, { y0, y0 }, "r-")->line_width(3);
         ax_legend->text(0.45, y0, "Branch Lines")
@@ -628,18 +738,26 @@ void viz_opf(const OPFVisualData& d) {
 
         ax_legend->scatter({ 0.20 }, { y0 - 2 * dy }, 45)
             ->marker_face(true)
-            .marker_color({ 0.0f,0.6f,0.0f })
-            .marker_face_color({ 0.0f,0.6f,0.0f });
+            .marker_color({ 0.53f,0.81f,0.98f })
+            .marker_face_color({ 0.53f,0.81f,0.98f });
         ax_legend->text(0.45, y0 - 2 * dy, "AC Generators")
             ->font_size(10)
             .alignment(matplot::labels::alignment::left);
 
         ax_legend->scatter({ 0.20 }, { y0 - 3 * dy }, 45)
             ->marker_face(true)
+            .marker_color({ 0.0f,0.6f,0.0f })
+            .marker_face_color({ 0.0f,0.6f,0.0f });
+        ax_legend->text(0.45, y0 - 3 * dy, "AC RES")
+            ->font_size(10)
+            .alignment(matplot::labels::alignment::left);
+
+        ax_legend->scatter({ 0.20 }, { y0 - 4 * dy }, 45)
+            ->marker_face(true)
             .marker_style(matplot::line_spec::marker_style::upward_pointing_triangle)
             .marker_color({ 0.1f,0.1f,0.85f })
             .marker_face_color({ 0.1f,0.1f,0.85f });
-        ax_legend->text(0.45, y0 - 3 * dy, "VSC Converters")
+        ax_legend->text(0.45, y0 - 4 * dy, "VSC Converters")
             ->font_size(10)
             .alignment(matplot::labels::alignment::left);
 

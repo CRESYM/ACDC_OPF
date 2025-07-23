@@ -97,9 +97,20 @@ DCNetworkParams params_dc(const std::string& dcgrid_name) {
     baseMW_dc = network_dc["baseMW"](0, 0);  
     pol_dc = network_dc["pol"](0, 0);      
     bus_dc = network_dc["bus"];
-    branch_dc = network_dc["branch"];
     conv_dc = network_dc["converter"];
     basekV_dc = conv_dc.col(13);
+
+    Eigen::MatrixXd branch_all = network_dc["branch"];
+    std::vector<Eigen::RowVectorXd> selected_rows;
+    for (int i = 0; i < branch_all.rows(); ++i) {
+        if (branch_all(i, 10) == 1.0) {
+            selected_rows.push_back(branch_all.row(i));
+        }
+    }
+    branch_dc = Eigen::MatrixXd(selected_rows.size(), branch_all.cols());
+    for (int i = 0; i < selected_rows.size(); ++i) {
+        branch_dc.row(i) = selected_rows[i];
+    }
 
     //  Determine the number of buses, branches, and converters
     nbuses_dc = bus_dc.rows();
@@ -122,7 +133,7 @@ DCNetworkParams params_dc(const std::string& dcgrid_name) {
       Extract VSC Impedance parameters
       The equivalent circuit for the VSC converter is as follows :
     
-      U_s  â—--[r_tf + j * x_tf]--â—--[r_c + j * x_c]--â— U_c--(VSC)--
+      U_s  ¡ñ--[r_tf + j * x_tf]--¡ñ--[r_c + j * x_c]--¡ñ U_c--(VSC)--
            PCC                   Filter               AC terminal
     
       PCC side parameters(r_tf, x_tf, bf_dc) and AC terminal side
@@ -170,3 +181,4 @@ DCNetworkParams params_dc(const std::string& dcgrid_name) {
 
     return sys_dc;
 }
+

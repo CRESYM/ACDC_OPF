@@ -1,4 +1,4 @@
-﻿#include"benchmarkTools.h"
+#include"benchmarkTools.h"
 #include "solve_opf.h"
 
 #include <iostream>
@@ -149,5 +149,3 @@ void save_results_csv(const std::vector<BenchmarkResult>& results, const std::st
     out.close();
     std::cout << "\nResults saved to " << filename << "\n";
 }
-
-

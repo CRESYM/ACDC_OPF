@@ -7,35 +7,19 @@
 
 struct OPFVisualData {
    
-    Eigen::MatrixXd bus_entire_ac;
-    Eigen::MatrixXd branch_entire_ac;
-    Eigen::MatrixXd gen_entire_ac;
-    Eigen::MatrixXd bus_dc;
-    Eigen::MatrixXd branch_dc;
-    Eigen::MatrixXd conv_dc;
-
-    Eigen::VectorXd vn2_dc_k;
-    Eigen::VectorXd ps_dc_k;
-    Eigen::VectorXd qs_dc_k;
-    Eigen::MatrixXd pij_dc_k;
-                     
-    std::vector<int> nbuses_ac;                     
-    std::vector<int> ngens_ac;        
-  
-    std::vector<Eigen::VectorXd> vn2_ac_k;   
-    std::vector<Eigen::VectorXd> pgen_ac_k;  
-    std::vector<Eigen::VectorXd> qgen_ac_k; 
-   
-    std::vector<Eigen::MatrixXd> pij_ac_k;   
-    std::vector<Eigen::MatrixXd> qij_ac_k;  
-
-    int nconvs_dc;
-    int nbuses_dc;
-    int ngrids;
-
+    Eigen::MatrixXd bus_entire_ac, branch_entire_ac, gen_entire_ac, res_entire_ac;
+    std::vector<Eigen::VectorXd> pgen_ac_k, qgen_ac_k, pres_ac_k, qres_ac_k;
+    std::vector<Eigen::MatrixXd> pij_ac_k, qij_ac_k;
+    std::vector<Eigen::VectorXd> vn2_ac_k;
+    std::vector<int> nbuses_ac, ngens_ac, nress_ac;
     double baseMVA_ac;
-    double baseMW_dc;
-    double pol_dc;
+    
+    Eigen::MatrixXd bus_dc, branch_dc, conv_dc;
+    Eigen::MatrixXd pij_dc_k;
+    Eigen::VectorXd ps_dc_k, qs_dc_k;
+    Eigen::VectorXd vn2_dc_k;
+    int nconvs_dc, nbuses_dc, ngrids;
+    double baseMW_dc, pol_dc;
 
 };
 
