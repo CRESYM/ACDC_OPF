@@ -632,6 +632,8 @@ The decision variable vector is partitioned into blocks as follows:
     - 7. qij_ac         : AC branch reactive power flow
     - 8. ss_ac          : AC SOC relaxed term no.1
     - 9. cc_ac          : AC SOC relaxed term no.2
+    - 10. pres_ac       : RES active power output
+    - 11. qres_ac       : RES reactive power output
  
 Inputs:
     - model: A Pyomo model.

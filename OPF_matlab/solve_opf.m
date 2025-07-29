@@ -622,7 +622,7 @@ function solve_opf(caseName_dc, caseName_ac, varargin)
             ub_ac{ng}{10} = res_ac{ng}(:, 2) / baseMVA_ac;
             con_ac = [con_ac; lb_ac{ng}{10} <= pres_ac{ng} <= ub_ac{ng}{10}];
 
-            % #11 RES active power output (pres_ac): nress x 1
+            % #11 RES reactive power output (qres_ac): nress x 1
             qres_ac{ng} = sdpvar(nress, 1);
             lb_ac{ng}{11} = lb_default;
             ub_ac{ng}{11} = ub_default;
