@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Li"
+  given-names: "Haixiao"
+  orcid: "https://orcid.org/0000-0001-5659-503X"
+- family-names: "Kermansaravi"
+  given-names: "Azadeh"
+  orcid: "https://orcid.org/0009-0002-0708-7543"
+- family-names: "Lekić"
+  given-names: "Aleksandra"
+  orcid: "https://orcid.org/0000-0003-2727-0767"
+title: "ACDC-OpFlow, Unified, Cross-Language Framework for AC/DC Optimal Power Flow Solutions"
+version: v0.1
+doi: 10.4121/2c1ff151-8f4f-4ccb-8667-7492de4f43a0
+date-released: 2025-07-30
+url: "https://github.com/CRESYM/ACDC_OPF"
