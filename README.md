@@ -6,7 +6,7 @@ Repository with Optimal Power Flow (OPF) library in Julia, Python, MATLAB, and C
 
 Code structure is simple and well-suited for researchers who are just beginning their journey into AC/DC OPF studies.
 
-Detailed information regarding AC/DC OPF problem formulation can be found in [Manual](Readme_ACDC_OPF.pdf).
+Detailed information regarding AC/DC OPF problem formulation can be found in [Manual](Manual_v0.1.2.pdf).
 
 Further improvements and new features will be added.
 
