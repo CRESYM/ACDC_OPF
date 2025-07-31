@@ -175,21 +175,21 @@ This is because `Matplot++` relies on [gunplot](https://sourceforge.net/projects
 
 ## 🖨️  Expected Output
 
-1. You will see the printed [AC/DC OPF results](assets/opf_result.txt) on the terminal window :
+1. You will see the printed [AC/DC OPF results](assets/opf_results_cpp.txt) on the terminal window :
 
      ```txt
-    =================================================================================
-    |      AC Grids Bus Data                                                        |
-    =================================================================================
-     Area   Branch        Voltage            Generation                Load        
-     #      #       Mag [pu]  Ang [deg]   Pg [MW]   Qg [MVAr]   Pd [MW]   Qd [MVAr]
-    -----   -----   --------  ---------   --------  ---------   -------   ---------
-       1       1      1.048      0.000    100.966    119.890     0.000       0.000
-       1       2      1.100      0.000    150.474    299.987     0.000       0.000
-       1       3      1.045      0.000    104.361     96.882     0.000       0.000
-       1       4      1.011      0.000        -         -        0.000       0.000
-       1       5      1.000      0.000        -         -       90.000      30.000
-    
+        =======================================================================================
+    |   AC  Grid Bus Data                                                                 |
+    =======================================================================================
+    Area    Bus   Voltage       Generation            Load                 RES
+    #       #     Mag [pu]  Pg [MW]   Qg [MVAr]  P [MW]   Q [MVAr]  Pres [MW]  Qres[MVAr] 
+    -----   -----  --------  --------  ---------  -------  -------   ---------  ---------
+      1       1      1.041*   87.562     99.575    0.000    0.000           -          -
+      1       2      1.093   134.529    300.000    0.000    0.000           -          -
+      1       3      1.034    93.127     81.335    0.000    0.000           -          -
+      1       4      1.009         -          -    0.000    0.000           -          -
+      1       5      1.000         -          -   90.000   30.000      40.000     -8.004
+
     ...... (omitted here)
 
 2. You will see the plotted AC/DC OPF results like:
