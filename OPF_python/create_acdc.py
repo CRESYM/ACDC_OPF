@@ -67,7 +67,7 @@ def create_ac(case_name: str) -> Dict[str, Any]:
         <case_name>_gen_ac.csv
         <case_name>_res_ac.csv
 
-    Returns a dictionary `dc` with the following keys:
+    Returns a dictionary `ac` with the following keys:
         "baseMVA": Scalar base MVA value.
         "bus": Matrix containing AC bus data.
         "branch": Matrix containing AC branch data.
