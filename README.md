@@ -1,4 +1,4 @@
-[![DOI](https://img.shields.io/badge/DOI-something-brightgreen.svg)](http://dx.doi.org/10.4121/66318317-4d5d-4dc4-ba5a-5fa65c585520.v1)
+[![DOI](https://img.shields.io/badge/DOI-10.4121/66318317--4d5d--4dc4--ba5a--5fa65c585520.v1-blue.svg)](http://dx.doi.org/10.4121/66318317-4d5d-4dc4-ba5a-5fa65c585520.v1)
 
 [![(https://img.shields.io/badge/DOI-10.4121%2F66318317-4d5d-4dc4-ba5a-5fa65c585520.v1?link=https%3A%2F%2Fdata.4tu.nl%2Fdatasets%2F66318317-4d5d-4dc4-ba5a-5fa65c585520%2F1)]]
 
