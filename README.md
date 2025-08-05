@@ -1,4 +1,4 @@
-[![DOI](https://img.shields.io/badge/10.4121/66318317-4d5d-4dc4-ba5a-5fa65c585520.v1?color=blue)](http://dx.doi.org/10.4121/66318317-4d5d-4dc4-ba5a-5fa65c585520.v1)
+[![DOI](http://dx.doi.org/10.4121/66318317-4d5d-4dc4-ba5a-5fa65c585520.v1)
 
 ![alt text](IEPG_logo.jpg?raw=true) $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$  ![alt text](cresym.png?raw=true)        
 
