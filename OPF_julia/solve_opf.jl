@@ -667,31 +667,38 @@ function solve_opf(dc_name::String, ac_name::String;
 
         # Define generation and RES costs
         for ng in 1:ngrids
+
+            # Gen cost (always)
             actgen_ac[ng] = generator_ac[ng][:, 8]
-            actres_ac[ng] = res_ac[ng][:, 11]
 
             if gencost_ac[ng][1, 4] == 3  # Quadratic cost type
                 obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac^2 .* gencost_ac[ng][:, 5] .* pgen_ac[ng].^2 + 
                             baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
                             gencost_ac[ng][:, 7]) )
             end
-            if res_ac[ng][1, 7] == 3 
-                obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac^2 .* res_ac[ng][:, 8] .* pres_ac[ng].^2 + 
-                            baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
-                            res_ac[ng][:, 10]) )
-            end
 
             if gencost_ac[ng][1, 4] == 2  # Linear cost type
                 obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
                             gencost_ac[ng][:, 7]) )
             end
-            if res_ac[ng][1, 7] == 2 
-                obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
-                            res_ac[ng][:, 10]) )
+            
+            # RES cost (only if)
+            if size(res_ac[ng], 1) > 0
+                actres_ac[ng] = res_ac[ng][:, 11] # Quadratic cost 
+                if res_ac[ng][1, 7] == 3 
+                    obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac^2 .* res_ac[ng][:, 8] .* pres_ac[ng].^2 + 
+                                baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
+                                res_ac[ng][:, 10]) )
+                end
+
+                if res_ac[ng][1, 7] == 2 # Linear cost type
+                    obj[ng] += sum( actres_ac[ng] .* (baseMVA_ac .* res_ac[ng][:, 9] .* pres_ac[ng] + 
+                                res_ac[ng][:, 10]) )
+                end
             end
         end
             
-        Obj = sum(obj)
+        Obj = sum(obj) 
 
         return Obj
 

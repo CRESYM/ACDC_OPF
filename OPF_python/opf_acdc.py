@@ -939,9 +939,9 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
 
     # Define generation and RES costs
     for ng in range(ngrids):
-        actgen_ac[ng] = generator_ac[ng][:, 7] 
-        actres_ac[ng] = res_ac[ng][:, 10]  
-         # Quadratic cost type
+
+        # Gen cost (always) 
+        actgen_ac[ng] = generator_ac[ng][:, 7] # qudaratic
         if gencost_ac[ng][0, 3] == 3: 
             obj[ng] = sum(
                 actgen_ac[ng][i] * (
@@ -950,17 +950,7 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
                     gencost_ac[ng][i, 6]
                 ) for i in range(ngens_ac[ng])
             )
-        if res_ac[ng][0, 6] == 3: 
-            obj[ng] += sum(
-                actres_ac[ng][i] * (
-                    baseMVA_ac**2 * res_ac[ng][i, 7] * model.pres_ac[ng, i]**2 +
-                    baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
-                    res_ac[ng][i, 9]
-                ) for i in range(nress_ac[ng])
-            )
-
-        # Linear cost type
-        if gencost_ac[ng][0, 3] == 2:  
+        if gencost_ac[ng][0, 3] == 2:  # linear
              obj[ng] = sum(
                 actgen_ac[ng][i] * (
                     baseMVA_ac * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i] +
@@ -968,13 +958,25 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
                 ) for i in range(ngens_ac[ng])
             )
              
-        if res_ac[ng][0, 6] == 2:  
-             obj[ng] += sum(
-                actres_ac[ng][i] * (
-                    baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
-                    res_ac[ng][i, 9]
-                ) for i in range(nress_ac[ng])
-            )
+        # RES cost (only if )
+        if res_ac[ng].shape[0] > 0:
+            actres_ac[ng] = res_ac[ng][:, 10]
+            if res_ac[ng][0, 6] == 3: # qudaratic
+                obj[ng] += sum(
+                    actres_ac[ng][i] * (
+                        baseMVA_ac**2 * res_ac[ng][i, 7] * model.pres_ac[ng, i]**2 +
+                        baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
+                        res_ac[ng][i, 9]
+                    ) for i in range(nress_ac[ng])
+                )
+            
+            if res_ac[ng][0, 6] == 2: # linear
+                obj[ng] += sum(
+                    actres_ac[ng][i] * (
+                        baseMVA_ac * res_ac[ng][i, 8] * model.pres_ac[ng, i] +
+                        res_ac[ng][i, 9]
+                    ) for i in range(nress_ac[ng])
+                )
              
        
        
