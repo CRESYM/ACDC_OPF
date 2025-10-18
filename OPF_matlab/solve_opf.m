@@ -103,66 +103,97 @@ function solve_opf(caseName_dc, caseName_ac, varargin)
     else
         fid = 1;  
     end
+
+    %% Voltage Anlge Reconstruction
+    theta_ac_k = cell(ngrids, 1);     
+    theta_s_k = zeros(nconvs_dc, 1); 
+    theta_c_k = zeros(nconvs_dc, 1); 
+    
+    for ng = 1:ngrids
+        % ---- find reference bus ----
+        if ~isempty(recRef_ac{ng})
+            ref_bus = recRef_ac{ng};   % have reference bus
+        else
+            % if no, the AC terminal (c node) of VSC is as the reference bus 
+            vsc_idx = find(conv_dc(:,3) == ng, 1);
+            ref_bus = conv_dc(vsc_idx, 2);
+        end
+    
+        theta_ac_k{ng} = recover_angle(cc_ac_k{ng}, ss_ac_k{ng}, ref_bus);
+    end
+    
+    % ---- θ_s ----
+    for i = 1:nconvs_dc
+        k = conv_dc(i,3);   % AC grid index
+        j = conv_dc(i,2);   % PCC bus number
+        theta_s_k(i) = theta_ac_k{k}(j);
+    end
+        
+    % ---- θ_c ----
+    for i = 1:nconvs_dc
+        dtheta_sc = atan2(Stc_dc_k(i), Ctc_dc_k(i));  
+        theta_c_k(i) = theta_s_k(i) - dtheta_sc;
+    end
+    
   
     %%  Print OPF Results of AC Grid Bus
-      fprintf(fid, '\n===============================================================================================');
-      fprintf(fid, '\n|      AC Grid Bus Data                                                                       |');
-      fprintf(fid, '\n===============================================================================================');
-      fprintf(fid, '\n Area   Branch  Voltage         Generation               Load                    RES');
-      fprintf(fid, '\n #      #       Mag [pu]    Pg [MW]   Qg [MVAr]   Pd [MW]   Qd [MVAr]   Pres [MW]  Qres [MVAr] ');
-      fprintf(fid, '\n-----   -----   --------   --------   ---------   -------   ---------   ---------  ----------- ');
-    
-      for ng = 1:ngrids
-          % Obtain generator bus indices for current grid
-          genidx = generator_ac{ng}(:, 1);
-          residx = res_ac{ng}(:, 1);
-          for i = 1:nbuses_ac{ng}
-              % Format AC voltage magnitude
-              formatted_vm_ac = sprintf('%.3f', sqrt(vn2_ac_k{ng}(i)));
-              fprintf(fid, '\n %3d %7d %10s', ng, i, formatted_vm_ac);
-              
-              % Mark reference bus with an asterisk
-              if i == recRef_ac{ng}
-                  fprintf(fid, '*');
-              end
-    
-              % Print generator data if the bus has a generator
-              if ismember(i, genidx)
-                  m = generator_ac{ng}(:,1);
-                  idx = find(m == i, 1);
-                  if i == recRef_ac{ng}
-                      formatted_pgen_ac = sprintf('%.3f', pgen_ac_k{ng}(idx) * baseMVA_ac);
-                      formatted_qgen_ac = sprintf('%.3f', qgen_ac_k{ng}(idx) * baseMVA_ac);
-                      fprintf(fid, '%10s %10s', formatted_pgen_ac, formatted_qgen_ac);
-                  else
-                      formatted_pgen_ac = sprintf('%.3f', pgen_ac_k{ng}(idx) * baseMVA_ac);
-                      formatted_qgen_ac = sprintf('%.3f', qgen_ac_k{ng}(idx) * baseMVA_ac);
-                      fprintf(fid, '%11s %10s', formatted_pgen_ac, formatted_qgen_ac);
-                  end
-                  formatted_pd = sprintf('%.3f', pd_ac{ng}(i) * baseMVA_ac);
-                  formatted_qd = sprintf('%.3f', qd_ac{ng}(i) * baseMVA_ac);
-                  fprintf(fid, '%11s %11s', formatted_pd, formatted_qd);
-              else
-                  fprintf(fid, '        -         -');
-                  formatted_pd = sprintf('%.3f', pd_ac{ng}(i) * baseMVA_ac);
-                  formatted_qd = sprintf('%.3f', qd_ac{ng}(i) * baseMVA_ac);
-                  fprintf(fid, '%14s %11s', formatted_pd, formatted_qd);
-              end
-
-              if ismember(i, residx)
-                  m = res_ac{ng}(:,1);
-                  idx = find(m == i, 1);
-                  formatted_pres  = sprintf('%.3f', pres_ac_k{ng}(idx) * baseMVA_ac);
-                  formatted_qres  = sprintf('%.3f', qres_ac_k{ng}(idx) * baseMVA_ac);
-                  fprintf(fid,' %10s %12s', formatted_pres, formatted_qres);
-              else                               
-                  fprintf(fid,' %8s %11s','-','-');
-              end
-
-          end
-   
-      end
-      fprintf(fid, '\n-----   -----   --------   --------   ---------   -------   ---------   ---------  ----------- ');
+        fprintf(fid, '\n=================================================================================================');
+        fprintf(fid, '\n|      AC Grid Bus Data                                                                         |');
+        fprintf(fid, '\n=================================================================================================');
+        fprintf(fid, '\n Area   Branch       Voltage              Generation               Load                    RES');
+        fprintf(fid, '\n #      #       Mag [pu]/Ang [deg]    Pg [MW]   Qg [MVAr]   Pd [MW]   Qd [MVAr]   Pres [MW]  Qres [MVAr] ');
+        fprintf(fid, '\n-----   -----   ------------------   --------   ---------   -------   ---------   ---------  ----------- ');
+        
+        for ng = 1:ngrids
+            % Obtain generator bus indices for current grid
+            genidx = generator_ac{ng}(:, 1);
+            residx = res_ac{ng}(:, 1);
+        
+            for i = 1:nbuses_ac{ng}
+                % ---- Voltage magnitude and phase ----
+                formatted_vm_ac = sprintf('%.3f', sqrt(vn2_ac_k{ng}(i)));
+                formatted_va_ac = sprintf('%.2f', rad2deg(theta_ac_k{ng}(i)));  
+        
+                % Mark reference bus with an asterisk
+                if i == recRef_ac{ng}
+                    ref_mark = '*';
+                else
+                    ref_mark = ' ';   
+                end
+                fprintf(fid, '\n %3d %7d %8s / %-5s %1s', ng, i, formatted_vm_ac, formatted_va_ac, ref_mark);
+        
+                % ---- Generator data ----
+                if ismember(i, genidx)
+                    m = generator_ac{ng}(:,1);
+                    idx = find(m == i, 1);
+                    formatted_pgen_ac = sprintf('%.3f', pgen_ac_k{ng}(idx) * baseMVA_ac);
+                    formatted_qgen_ac = sprintf('%.3f', qgen_ac_k{ng}(idx) * baseMVA_ac);
+                    fprintf(fid, '%13s %10s', formatted_pgen_ac, formatted_qgen_ac);
+        
+                    formatted_pd = sprintf('%.3f', pd_ac{ng}(i) * baseMVA_ac);
+                    formatted_qd = sprintf('%.3f', qd_ac{ng}(i) * baseMVA_ac);
+                    fprintf(fid, '%11s %11s', formatted_pd, formatted_qd);
+        
+                else
+                    fprintf(fid, '        -         -');
+                    formatted_pd = sprintf('%.3f', pd_ac{ng}(i) * baseMVA_ac);
+                    formatted_qd = sprintf('%.3f', qd_ac{ng}(i) * baseMVA_ac);
+                    fprintf(fid, '%16s %11s', formatted_pd, formatted_qd);
+                end
+        
+                % ---- RES data ----
+                if ismember(i, residx)
+                    m = res_ac{ng}(:,1);
+                    idx = find(m == i, 1);
+                    formatted_pres  = sprintf('%.3f', pres_ac_k{ng}(idx) * baseMVA_ac);
+                    formatted_qres  = sprintf('%.3f', qres_ac_k{ng}(idx) * baseMVA_ac);
+                    fprintf(fid,' %10s %12s', formatted_pres, formatted_qres);
+                else                               
+                    fprintf(fid,' %8s %11s','-','-');
+                end
+            end
+        end
+        fprintf(fid, '\n-----   -----   ------------------   --------   ---------   -------   ---------   ---------  ----------- ');
 
       % Print total generation cost
       totalGenerationCost = value(Obj);
@@ -841,6 +872,48 @@ function solve_opf(caseName_dc, caseName_ac, varargin)
         
         end
 
+    end
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    function theta = recover_angle(cc, ss, ref)
+    % RECOVER_ANGLE -Reconstruct voltage phase angles from SOC variables.
+    %
+    % INPUTS:
+    %   cc   - nb×nb matrix.  SOC variable |V_i||V_j|cos(θ_i - θ_j).
+    %   ss   - nb×nb matrix.  SOC variable |V_i||V_j|sin(θ_i - θ_j).
+    %   ref  - Scalar.        Reference bus index (θ_ref = 0).
+    %
+    % OUTPUT:
+    %   theta - nb×1 vector.  Reconstructed nodal voltage phase angles [rad].
+    %
+    % NOTES:
+    %   The function restores node angles by integrating phase differences
+    %   Δθ_ij = atan2(ss_ij, cc_ij) starting from the reference bus.
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+        nb = size(cc, 1);
+        theta = nan(nb, 1);
+        theta(ref) = 0;                     % Reference bus angle = 0
+        visited = false(nb, 1);
+        visited(ref) = true;
+    
+        G = abs(cc) > 1e-6; 
+        G(1:nb+1:end) = 0;                  % Remove self-loops
+        stack = [ref];
+    
+        while ~isempty(stack)
+            i = stack(end); 
+            stack(end) = [];
+    
+            for j = find(G(i,:))
+                if ~visited(j)
+                    dtheta = atan2(ss(i,j), cc(i,j));
+                    theta(j) = theta(i) - dtheta;
+                    visited(j) = true;
+                    stack(end+1) = j;
+                end
+            end
+        end
     end
 
 end
