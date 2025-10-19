@@ -24,8 +24,10 @@
 #include "solve_opf.h"
 
 // Remind: move ac / dc.csv files in "ACDC_CSV" folder to "OPF_cpp" folder
+// Below case fix the generation outputs to do powerflow compuation
+// (benchmark in Matacdc1.0 unser's manual, p31-p33)
 int main() {
-    solve_opf("mtdc3slack_a", "ac14ac57",
+    solve_opf("mtdc3", "ac5",
         /*vscControl*/ true,
         /*writeTxt  */ false,
         /*plotResult*/ false);

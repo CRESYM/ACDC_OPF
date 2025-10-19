@@ -228,7 +228,7 @@ ACNetworkParams params_ac(const std::string& acgrid_name) {
             int bus_id = static_cast<int>(bus_ac[ng](i, 0));
             IDtoCountmap[ng](bus_id - 1) = i;
             if (bus_ac[ng](i, 1) == 3) {
-                refbuscount_ac[ng] = i;
+                refbuscount_ac[ng] = i+1;
             }
         }
         recRef[ng].push_back(refbuscount_ac[ng]);
