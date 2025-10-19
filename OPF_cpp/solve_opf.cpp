@@ -772,6 +772,9 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
                     if (std::find(recRef[ng].begin(), recRef[ng].end(), i+1) != recRef[ng].end()) {
                         OUT << "*";
                     }
+                    else {
+                        OPF_OUT << " ";
+                    }
 
                     bool is_generator = (genidx.array() == i + 1).any();
                     if (is_generator) {
@@ -787,7 +790,7 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
                         double qgen = qgen_ac[ng](gen_idx).get(GRB_DoubleAttr_X) * baseMVA_ac;
 
                         if (std::find(recRef[ng].begin(), recRef[ng].end(), i) != recRef[ng].end()) {
-                            OUT << std::setw(11) << pgen << std::setw(12) << qgen;
+                            OUT << std::setw(11) << pgen << std::setw(11) << qgen;
                         }
                         else {
                             OUT << std::setw(11) << pgen << std::setw(11) << qgen;
@@ -800,7 +803,7 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
                         OUT << "         -          -";
                         double pd = pd_ac[ng](i) * baseMVA_ac;
                         double qd = qd_ac[ng](i) * baseMVA_ac;
-                        OUT << std::setw(11) << pd << std::setw(9) << qd;
+                        OUT << std::setw(10) << pd << std::setw(9) << qd;
                     }
 
 
