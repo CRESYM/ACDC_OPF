@@ -704,6 +704,52 @@ function solve_opf(dc_name::String, ac_name::String;
 
     end
 
+    """
+    === reconver_angle ===
+
+    This function reconstructs the voltage phase angles
+    from the second-order cone (SOC) relaxation variables of the AC grid.
+    
+    Inputs:
+        - cc : Matrix{Float64}
+            SOC variable |Vi||Vj|cos(θi - θj)
+        - ss : Matrix{Float64}
+            SOC variable |Vi||Vj|sin(θi - θj)
+        - ref_bus : Int
+
+    Output:
+        - theta : np.ndarray (nb,)
+        - Reconstructed nodal voltage phase angles
+
+    """
+    function recover_angle(cc::Matrix{Float64}, ss::Matrix{Float64}, ref::Int)
+        nb = size(cc, 1)
+        theta = fill(NaN, nb)
+        theta[ref] = 0.0
+
+        visited = falses(nb)
+        visited[ref] = true
+
+        G = abs.(cc) .> 1e-6
+        for i in 1:nb
+            G[i, i] = false
+        end
+
+        stack = [ref]
+        while !isempty(stack)
+            i = pop!(stack)
+            for j in findall(G[i, :])
+                if !visited[j]
+                    dtheta = atan(ss[i, j], cc[i, j])
+                    theta[j] = theta[i] - dtheta
+                    visited[j] = true
+                    push!(stack, j)
+                end
+            end
+        end
+        return theta
+    end
+
     # ============================ Main Program =============================
     elapsed_time = @elapsed begin
 
@@ -873,6 +919,41 @@ function solve_opf(dc_name::String, ac_name::String;
     end
 
 
+    # =============================================================
+    # 4: Voltage Angle Reconstruction
+    # =============================================================
+
+    theta_ac_k = Vector{Vector{Float64}}(undef, ngrids)
+    theta_s_k  = zeros(nconvs_dc)
+    theta_c_k  = zeros(nconvs_dc)
+
+    # ---- AC bus angles reconstruction ----
+    for ng in 1:ngrids
+        # ---- Find reference bus ----
+        ref_bus = !isempty(recRef_ac[ng]) ? recRef_ac[ng][] : begin
+            # If not specified, use PCC bus of first converter connected to this grid
+            vsc_idx = findfirst(x -> x == ng, conv_dc[:, 3])
+            isnothing(vsc_idx) && error("No converter found for grid $ng to set as reference bus.")
+            Int(conv_dc[vsc_idx, 2])
+        end
+
+        theta_ac_k[ng] = recover_angle(cc_ac_k[ng], ss_ac_k[ng], ref_bus)
+    end
+
+    # ---- θ_s (VSC PCC-side angle) ----
+    for i in 1:nconvs_dc
+        k = Int(conv_dc[i, 3])   # AC grid index
+        j = Int(conv_dc[i, 2])   # PCC bus number
+        theta_s_k[i] = theta_ac_k[k][j]
+    end
+
+    # ---- θ_c (VSC AC-side angle) ----
+    for i in 1:nconvs_dc
+        dtheta_sc = atan(Stc_dc_k[i], Ctc_dc_k[i])
+        theta_c_k[i] = theta_s_k[i] - dtheta_sc
+    end
+
+
     # ============================ Print Results =============================
     outfile = joinpath(pwd(), "opf_results.txt")
     io = writeTxt ? open(outfile, "w") : stdout
@@ -880,67 +961,57 @@ function solve_opf(dc_name::String, ac_name::String;
     # ----------------------------
     # Print AC Grid Bus Data
     # ---------------------------- 
-    println(io, "===========================================================================================")
-    println(io, "|   AC Grid Bus Data                                                                      |")
-    println(io, "===========================================================================================")
-    println(io, " Area    Bus   Voltage        Generation             Load                  RES")
-    println(io, " #       #     Mag [pu]  Pg [MW]   Qg [MVAr]   Pd [MW]  Qd [MVAr]  Pres [MW]  Qres [MVAr]")
-    println(io, "-----   -----  --------  --------   --------  ---------  --------  ---------  -----------")
+    println(io, "======================================================================================================")
+    println(io, "|      AC Grid Bus Data                                                                              |")
+    println(io, "======================================================================================================")
+    println(io, " Area   Bus        Voltage             Generation               Load                    RES")
+    println(io, " #      #      Mag [pu]/Ang [deg]   Pg [MW]   Qg [MVAr]   Pd [MW]   Qd [MVAr]   Pres [MW]  Qres [MVAr]")
+    println(io, "-----   -----   ------------------  --------   ---------   -------   ---------   ---------  ----------")
+
     for ng in 1:ngrids
         genidx = generator_ac[ng][:, 1]
         residx = res_ac[ng][:, 1]
+
         for i in 1:nbuses_ac[ng][]
-                
-            formatted_vm_ac = @sprintf("%.3f", sqrt(value(vn2_ac[ng][i])))
-        
-            print(io, lpad(ng, 3), " ",  lpad(i, 7), " ",
-                    lpad(formatted_vm_ac, 10, " ")) 
-                
-            if i == recRef_ac[ng][]
-                print(io, "*")
-            end
-        
+            # ---- Voltage magnitude and angle ----
+            formatted_vm_ac = @sprintf("%.3f", sqrt(vn2_ac_k[ng][i]))
+            formatted_va_ac = @sprintf("%.2f", theta_ac_k[ng][i] * 180 / pi)
+            ref_mark = (i == recRef_ac[ng][]) ? "*" : " "
+
+            print(io, lpad(ng, 3), " ", lpad(i, 7), " ",
+                lpad(formatted_vm_ac, 11), " / ", rpad(formatted_va_ac, 6), ref_mark)
+
+            # ---- Generator data ----
             if i in genidx
                 m = generator_ac[ng][:, 1]
-                formatted_pgen_ac = @sprintf("%.3f", value(pgen_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
-                formatted_qgen_ac = @sprintf("%.3f", value(qgen_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
-                    
-                if i == recRef_ac[ng][]
-                    print(io, lpad(formatted_pgen_ac, 9, " "),
-                        lpad(formatted_qgen_ac, 11, " "))
-                else
-                    print(io, lpad(formatted_pgen_ac, 10, " "),
-                        lpad(formatted_qgen_ac, 11, " "))
-                end
-                
-                formatted_pd = @sprintf("%.3f", value(pd_ac[ng][i]) * baseMVA_ac)
-                formatted_qd = @sprintf("%.3f", value(qd_ac[ng][i]) * baseMVA_ac)
-        
-                print(io, lpad(formatted_pd, 11, " "), lpad(formatted_qd, 10, " "))
-        
+                idx = findfirst(x -> x == i, m)
+                formatted_pgen_ac = @sprintf("%.3f", pgen_ac_k[ng][idx] * baseMVA_ac)
+                formatted_qgen_ac = @sprintf("%.3f", qgen_ac_k[ng][idx] * baseMVA_ac)
+                formatted_pd = @sprintf("%.3f", pd_ac[ng][i] * baseMVA_ac)
+                formatted_qd = @sprintf("%.3f", qd_ac[ng][i] * baseMVA_ac)
+                print(io, lpad(formatted_pgen_ac, 11), lpad(formatted_qgen_ac, 10),
+                        lpad(formatted_pd, 11), lpad(formatted_qd, 11))
             else
-                formatted_pd = @sprintf("%.3f", value(pd_ac[ng][i]) * baseMVA_ac)
-                formatted_qd = @sprintf("%.3f", value(qd_ac[ng][i]) * baseMVA_ac)
-                print(io, " " * "       -           -")
-                print(io, lpad(formatted_pd, 11, " "), lpad(formatted_qd, 10, " "))
+                formatted_pd = @sprintf("%.3f", pd_ac[ng][i] * baseMVA_ac)
+                formatted_qd = @sprintf("%.3f", qd_ac[ng][i] * baseMVA_ac)
+                print(io, "       -         -", lpad(formatted_pd, 14), lpad(formatted_qd, 11))
             end
 
+            # ---- RES data ----
             if i in residx
                 m = res_ac[ng][:, 1]
-                formatted_pres_ac = @sprintf("%.3f", value(pres_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
-                formatted_qres_ac = @sprintf("%.3f", value(qres_ac[ng][findfirst(m .== i)[1], 1]) * baseMVA_ac)
-                print(io, lpad(formatted_pres_ac, 11, " "), lpad(formatted_qres_ac, 13, " "))
+                idx = findfirst(x -> x == i, m)
+                formatted_pres = @sprintf("%.3f", pres_ac_k[ng][idx] * baseMVA_ac)
+                formatted_qres = @sprintf("%.3f", qres_ac_k[ng][idx] * baseMVA_ac)
+                println(io, lpad(formatted_pres, 12), lpad(formatted_qres, 12))
             else
-                 print(io, "          -            -")
+                println(io, "          -           -")
             end
-            print(io, "\n") 
-
         end
-        
     end
         
     totalGenerationCost = objective_value(model)
-    println(io, "-----   -----  --------  --------   --------  ---------  --------  ---------  -----------")
+    println(io, "-----   -----   ------------------  --------   ---------   -------   ---------   ---------  ----------")
     println(io, @sprintf("The total generation costs is ＄%.2f/MWh (€%.2f/MWh)", totalGenerationCost, totalGenerationCost / 1.08))
     print(io, "\n") 
 
@@ -1021,7 +1092,7 @@ function solve_opf(dc_name::String, ac_name::String;
     # Print DC Grid Branch Data
     # ---------------------------- 
     println(io, "================================================================================")
-    println(io, "|     MTDC Branch Data                                                        |")
+    println(io, "|     MTDC Branch Data                                                         |")
     println(io, "================================================================================")
     println(io, " Branch  From   To     From Branch    To Branch      Branch Loss")
     println(io, " #       Bus#   Bus#   Flow Pij [MW]  Flow Pij [MW]  Pij_loss [MW]")

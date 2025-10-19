@@ -29,7 +29,9 @@ include("solve_opf.jl") # solve ac/dc OPF
 include("viz_opf.jl") # visualize OPF 
 
 # Remind: move ac/dc .csv files in "ACDC_CSV" folder to "OPF_julia" folder
-result_opf = solve_opf("mtdc3slack_a", "ac14ac57",
+# Below case fix the generation outputs to do powerflow compuation
+# (benchmark in Matacdc1.0 unser's manual, p31-p33)
+result_opf = solve_opf("mtdc3", "ac5",
                     vscControl = true,
                     writeTxt = false,
                     plotResult = false)
