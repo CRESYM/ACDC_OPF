@@ -879,9 +879,9 @@ function solve_opf(caseName_dc, caseName_ac, varargin)
     % RECOVER_ANGLE -Reconstruct voltage phase angles from SOC variables.
     %
     % INPUTS:
-    %   cc   - nb×nb matrix.  SOC variable |V_i||V_j|cos(θ_i - θ_j).
-    %   ss   - nb×nb matrix.  SOC variable |V_i||V_j|sin(θ_i - θ_j).
-    %   ref  - Scalar.        Reference bus index (θ_ref = 0).
+    %   cc   - Array.  SOC variable |V_i||V_j|cos(θ_i - θ_j).
+    %   ss   - Array.  SOC variable |V_i||V_j|sin(θ_i - θ_j).
+    %   ref  - Scalar. Reference bus index (θ_ref = 0).
     %
     % OUTPUT:
     %   theta - nb×1 vector.  Reconstructed nodal voltage phase angles [rad].

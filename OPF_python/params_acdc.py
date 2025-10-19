@@ -255,7 +255,7 @@ def params_ac(acgrid_name: str) -> dict:
             bus_id = np.int64(bus_ac[ng][i, 0])
             IDtoCountmap[ng][bus_id - 1] = np.int64(i)
             if bus_ac[ng][i, 1] == 3:
-                refbuscount[ng] = i
+                refbuscount[ng] = i+1
         recRef_ac[ng].append(refbuscount[ng])
      
         # Compute AC network admittance matrix

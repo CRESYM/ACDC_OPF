@@ -21,8 +21,10 @@
 # [3]  Matacdc1.0 unser's manual, https://www.esat.kuleuven.be/electa/teaching/matacdc/MatACDCManual
 
 # Remind: move ac/dc .csv files in "ACDC_CSV" folder to "OPF_python" folder
+# Below case fix the generation outputs to do powerflow compuation
+# (benchmark in Matacdc1.0 unser's manual, p31-p33)
 from opf_acdc import solve_opf
-result_opf = solve_opf("mtdc3slack_a", "ac14ac57", 
+result_opf = solve_opf("mtdc3", "ac5", 
                        vscControl=True,
                        writeTxt=False,
                        plotResult=False)

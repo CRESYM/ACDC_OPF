@@ -107,40 +107,86 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
     
     end = time.perf_counter()
 
+    (vn2_dc_k, pn_dc_k, ps_dc_k, qs_dc_k, pc_dc_k, qc_dc_k, v2s_dc_k, v2c_dc_k,
+     Ic_dc_k, lc_dc_k, pij_dc_k, lij_dc_k, Ctt_dc_k, Ccc_dc_k, Ctc_dc_k, 
+     Stc_dc_k, Cct_dc_k, Sct_dc_k, convPloss_dc_k) = extract_vals_dc(model, nbuses_dc, nconvs_dc)
+    
+    (vn2_ac_k, pn_ac_k, qn_ac_k, pgen_ac_k, qgen_ac_k,
+     pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k, pres_ac_k, qres_ac_k) = extract_vals_ac(model, ngrids, nbuses_ac, ngens_ac, nress_ac)
+    
+
+
+    # =================== Voltage Angle Reconstruction =======================
+    theta_ac_k = [None] * ngrids
+    theta_s_k = np.zeros(nconvs_dc)
+    theta_c_k = np.zeros(nconvs_dc)
+
+    # --- Reconstruct θ_ac for each AC grid ---
+    for ng in range(ngrids):
+        # ---- find reference bus ----
+        if recRef_ac[ng] is not None and len(np.atleast_1d(recRef_ac[ng])) > 0:
+            ref_bus = int(np.atleast_1d(recRef_ac[ng])[0]) - 1
+        else:
+            # if no reference bus, the PCC (c node) of VSC is used as the reference bus
+            vsc_idx = np.where(conv_dc[:, 2] == ng + 1)[0][0]
+            ref_bus = int(conv_dc[vsc_idx, 1]) - 1
+
+        theta_ac_k[ng] = recover_angle(cc_ac_k[ng], ss_ac_k[ng], ref_bus)
+
+    # --- Compute θ_s (PCC-side angle) ---
+    for i in range(nconvs_dc):
+        k = int(conv_dc[i, 2]) - 1   
+        j = int(conv_dc[i, 1]) - 1   
+        theta_s_k[i] = theta_ac_k[k][j]
+
+    # --- Compute θ_c (converter-side angle) ---
+    for i in range(nconvs_dc):
+        dtheta_sc = np.arctan2(Stc_dc_k[i], Ctc_dc_k[i])
+        theta_c_k[i] = theta_s_k[i] - dtheta_sc
+
+    for ng in range(ngrids):
+        ref_bus = int(np.atleast_1d(recRef_ac[ng])[0])
+        print(f"[check] Grid {ng+1} reference bus {ref_bus+1} angle = {theta_ac_k[ng][ref_bus]:.8f}")
+
 
     # ============================ Print Results =============================
     outfile = os.path.join(os.getcwd(), "opf_results.txt")
     io_ctx  = open(outfile, "w", encoding="utf-8") if writeTxt else nullcontext()
     io      = io_ctx if writeTxt else sys.stdout
     with io_ctx if writeTxt else nullcontext():
+        
         # ----------------------------
         # Print AC Grid Bus Data
         # ---------------------------- 
-        print("=======================================================================================", file=io)
-        print("|   AC Grid Bus Data                                                                  |", file=io)
-        print("=======================================================================================", file=io)
-        print("Area     Bus   Voltage       Generation             Load                 RES", file=io)
-        print("#        #     Mag [pu]  Pg [MW]  Qg [MVAr]    P [MW]  Q [MVAr]  Pres [MW]  Qres [MVAr]", file=io)
-        print("-----   -----  --------  --------  --------  ---------   ------  ---------  -----------", file=io)
-        formatted_vm_ac = {ng: [np.sqrt(value(model.vn2_ac[ng, i])) for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
-        formatted_pgen_ac = {ng: [value(model.pgen_ac[ng, j]) * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
-        formatted_qgen_ac = {ng: [value(model.qgen_ac[ng, j]) * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
-        formatted_pres_ac = {ng: [value(model.pres_ac[ng, j]) * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
-        formatted_qres_ac = {ng: [value(model.qres_ac[ng, j]) * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
+        print("======================================================================================================", file=io)
+        print("|   AC Grid Bus Data                                                                                 |", file=io)
+        print("======================================================================================================", file=io)
+        print("Area     Bus           Voltage               Generation             Load                 RES", file=io)
+        print("#        #       Mag [pu]/Ang [deg]     Pg [MW]  Qg [MVAr]    P [MW]  Q [MVAr]  Pres [MW]  Qres [MVAr]", file=io)
+        print("-----   -----   --------------------   --------  ---------  --------  --------  ---------  -----------", file=io)
+        formatted_vm_ac = {ng: [np.sqrt(vn2_ac_k[ng][i]) for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
+        formatted_va_ac = {ng: [np.degrees(theta_ac_k[ng][i]) for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
+        formatted_pgen_ac = {ng: [pgen_ac_k[ng][j] * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
+        formatted_qgen_ac = {ng: [qgen_ac_k[ng][j] * baseMVA_ac for j in range(ngens_ac[ng])] for ng in range(ngrids)}
+        formatted_pres_ac = {ng: [pres_ac_k[ng][j] * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
+        formatted_qres_ac = {ng: [qres_ac_k[ng][j] * baseMVA_ac for j in range(nress_ac[ng])] for ng in range(ngrids)}
         formatted_pd_ac = {ng: [pd_ac[ng][i] * baseMVA_ac for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
         formatted_qd_ac = {ng: [qd_ac[ng][i] * baseMVA_ac for i in range(nbuses_ac[ng])] for ng in range(ngrids)}
         for ng in range(ngrids):
             genidx = [int(generator_ac[ng][j, 0]) for j in range(ngens_ac[ng])]  
             residx = [int(res_ac[ng][j, 0]) for j in range(nress_ac[ng])]  
             for i in range(nbuses_ac[ng]):
-                printed_vm_ac = formatted_vm_ac[ng][i]
-                if i == 0 and ng == 0:
-                    print(f"{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}", end="", file=io)
-                else:
-                    print(f"\n{ng+1:3}{i+1:9}{printed_vm_ac:10.3f}", end="", file=io)
+                vm = formatted_vm_ac[ng][i]
+                va = formatted_va_ac[ng][i]
+               
+                is_ref = (i in (np.atleast_1d(recRef_ac[ng]) - 1)) if recRef_ac[ng] is not None else False
+                ref_mark = "*" if is_ref else "  "
+                formatted_voltage = f"{vm:12.3f}/{va:6.2f}{ref_mark}"
 
-                if i in recRef_ac[ng]:
-                    print("*", end="", file=io)
+                if i == 0 and ng == 0:
+                    print(f"{ng+1:3}{i+1:9}{formatted_voltage:>14}", end="", file=io)
+                else:
+                    print(f"\n{ng+1:3}{i+1:9}{formatted_voltage:>14}", end="", file=io)
 
                 if i + 1 in genidx:
                     gen_idx = genidx.index(i + 1)
@@ -148,29 +194,29 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
                     printed_qgen = formatted_qgen_ac[ng][gen_idx]
                     
                     if i in recRef_ac[ng]:
-                        print(f"{printed_pgen:10.3f}{printed_qgen:9.3f}", end="", file=io)
+                        print(f"{printed_pgen:14.3f}{printed_qgen:9.3f}", end="", file=io)
                     else:
-                        print(f"{printed_pgen:11.3f}{printed_qgen:9.3f}", end="", file=io)
+                        print(f"{printed_pgen:15.3f}{printed_qgen:9.3f}", end="", file=io)
 
                     printed_pd = formatted_pd_ac[ng][i]
                     printed_qd = formatted_qd_ac[ng][i]
-                    print(f"{printed_pd:11.3f}{printed_qd:9.3f}", end="", file=io)
+                    print(f"{printed_pd:10.3f}{printed_qd:10.3f}", end="", file=io)
 
                 else:
-                    print("          -       -", end="", file=io)
+                    print("          -         -", end="", file=io)
                     printed_pd = formatted_pd_ac[ng][i]
                     printed_qd = formatted_qd_ac[ng][i]
-                    print(f"{printed_pd:12.3f}{printed_qd:9.3f}", end="", file=io)
+                    print(f"{printed_pd:13.3f}{printed_qd:9.3f}", end="", file=io)
 
                 if i + 1 in residx:
                     res_idx = residx.index(i + 1)
                     printed_pres = formatted_pres_ac[ng][res_idx]
                     printed_qres = formatted_qres_ac[ng][res_idx]
-                    print(f"{printed_pres:11.3f}{printed_qres:13.3f}", end="", file=io)
+                    print(f"{printed_pres:11.3f}{printed_qres:14.3f}", end="", file=io)
                 else:
-                    print("          -            -",  end="", file=io)
+                    print("        -          -",  end="", file=io)
 
-        print("\n-----   -----  --------  --------  --------  ---------   ------  ---------  -----------", file=io)
+        print("\n" "-----   -----   --------------------   --------  ---------  --------  --------  ---------  -----------", file=io)
         
         totalGenerationCost = value(model.objective)
         print(f"The total generation costs is ＄{totalGenerationCost:.2f}/MWh (€{totalGenerationCost / 1.08:.2f}/MWh)", file=io)
@@ -187,13 +233,13 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
         print("----   ------  -----  -----  ---------  ----------   ----------  ----------  -------------", file=io)
         
         formatted_pij_ac = {
-            ng: [[value(model.pij_ac[ng, i, j]) * baseMVA_ac for j in range(nbuses_ac[ng])] 
+            ng: [[pij_ac_k[ng][i, j] * baseMVA_ac for j in range(nbuses_ac[ng])] 
             for i in range(nbuses_ac[ng])]
         for ng in range(ngrids)
         }
         
         formatted_qij_ac = {
-            ng: [[value(model.qij_ac[ng, i, j]) * baseMVA_ac for j in range(nbuses_ac[ng])] 
+            ng: [[qij_ac_k[ng][i, j] * baseMVA_ac for j in range(nbuses_ac[ng])] 
             for i in range(nbuses_ac[ng])]
         for ng in range(ngrids)
         }
@@ -231,11 +277,11 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
         print(" Bus   Bus    AC   DC Voltage   DC Power   PCC Bus Injection   Converter loss", file=io)
         print(" DC #  AC #  Area   Vdc [pu]    Pdc [MW]   Ps [MW]  Qs [MVAr]  Conv_Ploss [MW]", file=io)
         print("-----  ----  ----  ---------    --------   -------  --------    --------", file=io)
-        formatted_vm_dc = np.sqrt([value(model.vn2_dc[i]) for i in range(nbuses_dc)])
-        formatted_pn_dc = [value(model.pn_dc[i]) * baseMW_dc for i in range(nbuses_dc)]
-        formatted_ps_dc = [value(model.ps_dc[i]) * baseMW_dc for i in range(nconvs_dc)]
-        formatted_qs_dc = [value(model.qs_dc[i]) * baseMW_dc for i in range(nconvs_dc)]
-        formatted_convPloss_dc = [value(model.convPloss_dc[i]) * baseMW_dc for i in range(nbuses_dc)]
+        formatted_vm_dc = np.sqrt([vn2_dc_k[i] for i in range(nbuses_dc)])
+        formatted_pn_dc = [pn_dc_k[i] * baseMW_dc for i in range(nbuses_dc)]
+        formatted_ps_dc = [ps_dc_k[i] * baseMW_dc for i in range(nconvs_dc)]
+        formatted_qs_dc = [qs_dc_k[i] * baseMW_dc for i in range(nconvs_dc)]
+        formatted_convPloss_dc = [convPloss_dc_k[i] * baseMW_dc for i in range(nbuses_dc)]
         TotalConvPloss = 0.0
         for i in range(nbuses_dc):
             printed_ac_bus = int(conv_dc[i, 1])
@@ -257,12 +303,12 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
         # Print DC Grid Branch Data
         # ---------------------------- 
         print("===================================================================", file=io)
-        print(" |     MTDC Branch Data                                            |", file=io)
-        print(" ===================================================================", file=io)
+        print("|     MTDC Branch Data                                            |", file=io)
+        print(" ==================================================================", file=io)
         print(" Branch  From   To     From Branch    To Branch      Branch Loss", file=io)
         print(" #       Bus#   Bus#   Flow Pij [MW]  Flow Pij [MW]  Pij_loss [MW]", file=io)
         print(" ------  -----  -----   ---------      ---------      ---------", file=io)
-        formatted_pij_dc = [[value(model.pij_dc[i, j]) for j in range(nbuses_dc)] for i in range(nbuses_dc)] * baseMW_dc * pol_dc
+        formatted_pij_dc = [[pij_dc_k[i, j] for j in range(nbuses_dc)] for i in range(nbuses_dc)] * baseMW_dc * pol_dc
         
         totalDCPowerLoss = 0.0
         for i in range(nbranches_dc):
@@ -287,13 +333,7 @@ def solve_opf(dcgrid_name: str, acgrid_name: str, *,
     if writeTxt:
         print(f"[info] OPF results saved to {outfile}")   
 
-    (vn2_dc_k, pn_dc_k, ps_dc_k, qs_dc_k, pc_dc_k, qc_dc_k, v2s_dc_k, v2c_dc_k,
-     Ic_dc_k, lc_dc_k, pij_dc_k, lij_dc_k, Ctt_dc_k, Ccc_dc_k, Ctc_dc_k, 
-     Stc_dc_k, Cct_dc_k, Sct_dc_k, convPloss_dc_k) = extract_vals_dc(model, nbuses_dc, nconvs_dc)
-    
-    (vn2_ac_k, pn_ac_k, qn_ac_k, pgen_ac_k, qgen_ac_k,
-     pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k, pres_ac_k, qres_ac_k) = extract_vals_ac(model, ngrids, nbuses_ac, ngens_ac, nress_ac)
-    
+
     if plotResult:
         viz_opf(
         bus_entire_ac,
@@ -985,6 +1025,7 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
 
     model.objective = Objective(rule=objective_rule, sense=minimize)
 
+
 def extract_vals_dc(
     model: ConcreteModel,
     nbuses_dc: int,
@@ -1084,6 +1125,50 @@ def extract_vals_ac(
     
     return (vn2_ac_k, pn_ac_k, qn_ac_k, pgen_ac_k, qgen_ac_k,
         pij_ac_k, qij_ac_k, ss_ac_k, cc_ac_k, pres_ac_k, qres_ac_k)
+
+"""
+=== reconver_angle ===
+
+This function reconstructs the voltage phase angles
+from the second-order cone (SOC) relaxation variables of the AC grid.
+ 
+Inputs:
+    - cc : np.ndarray 
+          SOC variable |Vi||Vj|cos(θi - θj)
+    - ss : np.ndarray 
+          SOC variable |Vi||Vj|sin(θi - θj)
+    - ref_bus : int
+
+Output:
+    - theta : np.ndarray (nb,)
+    - Reconstructed nodal voltage phase angles
+
+"""
+
+def recover_angle(cc: np.ndarray, ss: np.ndarray, ref_bus: int) -> np.ndarray:
+
+    nb = cc.shape[0]
+    theta = np.full(nb, np.nan)
+    visited = np.zeros(nb, dtype=bool)
+
+    theta[ref_bus] = 0.0
+    visited[ref_bus] = True
+
+    G = (np.abs(cc) > 1e-6) | (np.abs(cc.T) > 1e-6)
+    np.fill_diagonal(G, False)
+
+    stack = [ref_bus]
+    while stack:
+        i = stack.pop()
+        for j in np.where(G[i, :])[0]:
+            if not visited[j]:
+                dtheta = np.arctan2(ss[i, j], cc[i, j])
+                theta[j] = theta[i] - dtheta
+                visited[j] = True
+                stack.append(j)
+
+    theta -= theta[ref_bus]
+    return theta
     
    
 if __name__ == "__main__":

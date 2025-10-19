@@ -505,57 +505,58 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
         /**************************************************
         * SET OPTIMIZATION OBJECTIVE
         **************************************************/
-
         GRBQuadExpr obj = 0.0;
+
         for (int ng = 0; ng < ngrids; ++ng) {
-            actgen_ac[ng] = generator_ac[ng].col(7);
-            actres_ac[ng] = res_ac[ng].col(10);
 
-            // Generator cost (always) 
-            if (gencost_ac[ng](0, 3) == 3) {  // Quadratic cost 
+
+            if (generator_ac[ng].rows() > 0 && gencost_ac[ng].rows() > 0) {
+                actgen_ac[ng] = generator_ac[ng].col(7);
+
                 for (int i = 0; i < ngens_ac[ng]; ++i) {
-                    obj += actgen_ac[ng](i) * (
-                        baseMVA_ac * baseMVA_ac * gencost_ac[ng](i, 4) * (pgen_ac[ng](i) * pgen_ac[ng](i)) +
-                        baseMVA_ac * gencost_ac[ng](i, 5) * pgen_ac[ng](i) +
-                        gencost_ac[ng](i, 6)
+                    double typegen = gencost_ac[ng](i, 3);
+
+                    if (typegen == 3) {  // Quadratic cost
+                        obj += actgen_ac[ng](i) * (
+                            baseMVA_ac * baseMVA_ac * gencost_ac[ng](i, 4) * (pgen_ac[ng](i) * pgen_ac[ng](i)) +
+                            baseMVA_ac * gencost_ac[ng](i, 5) * pgen_ac[ng](i) +
+                            gencost_ac[ng](i, 6)
                         );
+                    } 
+                    else if (typegen == 2) {  // Linear cost
+                        obj += actgen_ac[ng](i) * (
+                            baseMVA_ac * gencost_ac[ng](i, 5) * pgen_ac[ng](i) +
+                            gencost_ac[ng](i, 6)
+                        );
+                    }
                 }
             }
 
-            if (gencost_ac[ng](0, 3) == 2) {  // Linear cost 
-                for (int i = 0; i < ngens_ac[ng]; ++i) {
-                    obj += actgen_ac[ng](i) * (
-                        baseMVA_ac * gencost_ac[ng](i, 5) * pgen_ac[ng](i) +
-                        gencost_ac[ng](i, 6)
-                        );
-                }
-            }
-
-            // RES cost (only if)
-            if (res_ac[ng].rows() > 0) { // Quadratic cost 
+            // --------------------------------------------------
+            if (res_ac[ng].rows() > 0) {
                 actres_ac[ng] = res_ac[ng].col(10);
 
-                if (res_ac[ng](0, 6) == 3) {
-                    for (int i = 0; i < nress_ac[ng]; ++i) {
+                for (int i = 0; i < nress_ac[ng]; ++i) {
+                    double typeres = res_ac[ng](i, 6);
+
+                    if (typeres == 3) {  // Quadratic cost
                         obj += actres_ac[ng](i) * (
                             baseMVA_ac * baseMVA_ac * res_ac[ng](i, 7) * (pres_ac[ng](i) * pres_ac[ng](i)) +
                             baseMVA_ac * res_ac[ng](i, 8) * pres_ac[ng](i) +
                             res_ac[ng](i, 9)
-                            );
-                    }
-                }
-
-                if (res_ac[ng](0, 6) == 2) { // Linear cost 
-                    for (int i = 0; i < nress_ac[ng]; ++i) {
+                        );
+                    } 
+                    else if (typeres == 2) {  // Linear cost
                         obj += actres_ac[ng](i) * (
                             baseMVA_ac * res_ac[ng](i, 8) * pres_ac[ng](i) +
                             res_ac[ng](i, 9)
-                            );
+                        );
                     }
                 }
             }
-
         }
+        
+
         GRBVar genCost = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS);
 
         model.setObjective(obj);
