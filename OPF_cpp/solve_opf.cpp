@@ -773,7 +773,7 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
                         OUT << "*";
                     }
                     else {
-                        OPF_OUT << " ";
+                        OUT << " ";
                     }
 
                     bool is_generator = (genidx.array() == i + 1).any();

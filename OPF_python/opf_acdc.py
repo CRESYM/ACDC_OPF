@@ -979,26 +979,28 @@ def setup_obj(model:ConcreteModel, res_params_dc: Dict[str, Any], res_params_ac:
 
     # Define generation and RES costs
     for ng in range(ngrids):
+        obj[ng] = 0
 
-        # Gen cost (always) 
-        actgen_ac[ng] = generator_ac[ng][:, 7] # qudaratic
-        if gencost_ac[ng][0, 3] == 3: 
-            obj[ng] = sum(
-                actgen_ac[ng][i] * (
-                    baseMVA_ac**2 * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i]**2 +
-                    baseMVA_ac * gencost_ac[ng][i, 5] * model.pgen_ac[ng, i] +
-                    gencost_ac[ng][i, 6]
-                ) for i in range(ngens_ac[ng])
-            )
-        if gencost_ac[ng][0, 3] == 2:  # linear
-             obj[ng] = sum(
-                actgen_ac[ng][i] * (
-                    baseMVA_ac * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i] +
-                    gencost_ac[ng][i, 5]
-                ) for i in range(ngens_ac[ng])
-            )
+        # Gen cost 
+        if generator_ac[ng].shape[0] > 0 and gencost_ac[ng].shape[0] > 0:
+            actgen_ac[ng] = generator_ac[ng][:, 7] # qudaratic
+            if gencost_ac[ng][0, 3] == 3: 
+                obj[ng] = sum(
+                    actgen_ac[ng][i] * (
+                        baseMVA_ac**2 * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i]**2 +
+                        baseMVA_ac * gencost_ac[ng][i, 5] * model.pgen_ac[ng, i] +
+                        gencost_ac[ng][i, 6]
+                    ) for i in range(ngens_ac[ng])
+                )
+            if gencost_ac[ng][0, 3] == 2:  # linear
+                obj[ng] = sum(
+                    actgen_ac[ng][i] * (
+                        baseMVA_ac * gencost_ac[ng][i, 4] * model.pgen_ac[ng, i] +
+                        gencost_ac[ng][i, 5]
+                    ) for i in range(ngens_ac[ng])
+                )
              
-        # RES cost (only if )
+        # RES cost 
         if res_ac[ng].shape[0] > 0:
             actres_ac[ng] = res_ac[ng][:, 10]
             if res_ac[ng][0, 6] == 3: # qudaratic

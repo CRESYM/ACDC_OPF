@@ -667,22 +667,26 @@ function solve_opf(dc_name::String, ac_name::String;
 
         # Define generation and RES costs
         for ng in 1:ngrids
+            obj[ng] = 0.0
 
-            # Gen cost (always)
-            actgen_ac[ng] = generator_ac[ng][:, 8]
+            # Gen cost
+            if size(generator_ac[ng], 1) > 0 && size(gencost_ac[ng], 1) > 0
+                actgen_ac[ng] = generator_ac[ng][:, 8]
 
-            if gencost_ac[ng][1, 4] == 3  # Quadratic cost type
-                obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac^2 .* gencost_ac[ng][:, 5] .* pgen_ac[ng].^2 + 
-                            baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
-                            gencost_ac[ng][:, 7]) )
-            end
+                if gencost_ac[ng][1, 4] == 3  # Quadratic cost type
+                    obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac^2 .* gencost_ac[ng][:, 5] .* pgen_ac[ng].^2 + 
+                                baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
+                                gencost_ac[ng][:, 7]) )
+                end
 
-            if gencost_ac[ng][1, 4] == 2  # Linear cost type
-                obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
-                            gencost_ac[ng][:, 7]) )
+                if gencost_ac[ng][1, 4] == 2  # Linear cost type
+                    obj[ng] = sum( actgen_ac[ng] .* (baseMVA_ac .* gencost_ac[ng][:, 6] .* pgen_ac[ng] + 
+                                gencost_ac[ng][:, 7]) )
+                end
+                
             end
             
-            # RES cost (only if)
+            # RES cost 
             if size(res_ac[ng], 1) > 0
                 actres_ac[ng] = res_ac[ng][:, 11] # Quadratic cost 
                 if res_ac[ng][1, 7] == 3 
