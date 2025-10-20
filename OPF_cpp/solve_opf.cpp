@@ -670,7 +670,7 @@ void solve_opf(const std::string& dc_name, const std::string& ac_name,
             Eigen::VectorXd theta_c_k = Eigen::VectorXd::Zero(nconvs_dc);
 
             for (int ng = 0; ng < ngrids; ++ng) {
-                int ref_bus;
+                int ref_bus = -1;
 
                 // ---- θ_ac ----
                 if (!recRef[ng].empty()) {
