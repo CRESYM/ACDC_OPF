@@ -45,12 +45,12 @@ author = {Haixiao Li and Azadeh Kermansaravi and Robert Dimitrovski and Aleksand
 
 The AC/DC OPF functionality of **ACDC-OpFlow** has been integrated into [**Harmony**](https://github.com/CRESYM/Harmony), The integration includes an enhanced MISOCP formulation to improve the consistency of converter operating points. Further theoretical and implementation improvements will be incorporated into future updates.
 
-The screenshots below show OPF example selection and result visualization in the Harmony UI.
+The screenshot and animation below show OPF example selection and result visualization in the Harmony UI.
 
-![Harmony UI showing OPF example selection](Harmonu-UI-1.png?raw=true)
+![Harmony UI showing OPF example selection](UI-1.png?raw=true)
 
 *OPF example selection in the Harmony launcher.*
 
-![Harmony UI showing AC/DC OPF results](Harmony-UI-2.png?raw=true)
+<img src="DemoGif.gif?raw=true" alt="Harmony UI demonstrating AC/DC OPF results" width="1540">
 
-*Visualization of the AC/DC OPF results in Harmony.*
+*Demo of Implementing AC/DC OPF results in Harmony.*
