@@ -47,10 +47,10 @@ The AC/DC OPF functionality of **ACDC-OpFlow** has been integrated into [**Harmo
 
 The screenshot and animation below show OPF example selection and result visualization in the Harmony UI.
 
-![Harmony UI showing OPF example selection](UI-1.png?raw=true)
+<img src="UI-1.png?raw=true" alt="Harmony UI showing OPF example selection" width="359">
 
 *OPF example selection in the Harmony launcher.*
 
-<img src="DemoGif.gif?raw=true" alt="Harmony UI demonstrating AC/DC OPF results" width="1540">
+<img src="DemoGif.gif?raw=true" alt="Harmony UI demonstrating AC/DC OPF results" width="1340">
 
 *Demo of Implementing AC/DC OPF results in Harmony.*
