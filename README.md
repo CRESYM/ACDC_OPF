@@ -38,3 +38,9 @@ author = {Haixiao Li and Azadeh Kermansaravi and Robert Dimitrovski and Aleksand
 - **Azadeh Kermansaravi**, help with development of C++ power flow solution
 - **Robert Dimitrovski**, funding acquisition
 - **Aleksandra Lekić**, supervision, definition of the framework and functionalities, and acquisition of the funding
+
+## Updates
+
+### Integration with Harmony
+
+The AC/DC OPF functionality of **ACDC-OpFlow** has been integrated into [**Harmony**](https://github.com/CRESYM/Harmony), The integration includes an enhanced MISOCP formulation to improve the consistency of converter operating points. Further theoretical and implementation improvements will be incorporated into future updates.
